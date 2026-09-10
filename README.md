@@ -11,9 +11,13 @@
 ต้องมี `python3` (macOS มีมาให้อยู่แล้ว)
 
 ```bash
-mkdir -p ~/.claude/skills && tar -xzf agent-cost.tar.gz -C ~/.claude/skills
+mkdir -p ~/.claude/skills
+git clone https://github.com/thanathe/agent-cost.git ~/.claude/skills/agent-cost
 python3 ~/.claude/skills/agent-cost/scripts/install.py
 ```
+
+(ได้มาเป็นไฟล์ zip แทน: `tar -xzf agent-cost.tar.gz -C ~/.claude/skills` แล้วรัน `install.py` เหมือนกัน)
+อัปเดตทีหลัง: `git -C ~/.claude/skills/agent-cost pull` — ledger ไม่โดนแตะ (อยู่คนละที่ + gitignore)
 
 ตัวติดตั้งจะถาม 2 ข้อ — **เก็บไฟล์ ledger ไว้ที่ไหน** (Enter = `~/.agent-cost`) และ
 **จะจด prompt ที่สั่งไปด้วยไหม** จากนั้นมันจะ:
