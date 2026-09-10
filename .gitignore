@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+# ข้อมูลของแต่ละเครื่อง ไม่ควรหลุดขึ้น repo
+ledger.jsonl
+pricing.json
+*.local.json
