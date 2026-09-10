@@ -12,7 +12,7 @@ from the raw data.
   report.py --compare            # codebuddy vs claude, side by side
   report.py --write              # also write <LEDGER_DIR>/<month>.md
 """
-import json, os, sys, argparse, datetime
+import json, os, sys, glob, argparse, datetime
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -49,11 +49,41 @@ def usd(rec, pricing):
     )
 
 
+def ledger_files(args):
+    """(path, owner) pairs to read.
+
+    Default: this machine's own ledger. With --ledger you can point at a pile of
+    files collected from other people — owner comes from the filename
+    (`ledger-preaw.jsonl` → preaw), so nobody has to edit anyone's data to merge it.
+    """
+    if not args.ledger:
+        return [(LEDGER, "me")]
+    out = []
+    for pat in args.ledger:
+        hits = sorted(glob.glob(os.path.expanduser(pat))) or [os.path.expanduser(pat)]
+        for p in hits:
+            base = os.path.basename(p)
+            for ext in (".jsonl", ".json"):
+                base = base[: -len(ext)] if base.endswith(ext) else base
+            owner = base.split("-", 1)[1] if base.startswith("ledger-") else base
+            out.append((p, owner or "?"))
+    return out
+
+
 def load(args):
     rows = []
-    if not os.path.exists(LEDGER):
-        return rows
-    with open(LEDGER, encoding="utf-8") as f:
+    seen = set()
+    for path, owner in ledger_files(args):
+        if not os.path.exists(path):
+            print(f"ข้าม (ไม่เจอไฟล์): {path}", file=sys.stderr)
+            continue
+        rows += load_one(path, owner, args, seen)
+    return rows
+
+
+def load_one(path, owner, args, seen):
+    rows = []
+    with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -62,6 +92,15 @@ def load(args):
                 r = json.loads(line)
             except Exception:
                 continue
+            r["_owner"] = r.get("owner") or owner
+            # turn_key = sha1(agent:session:turn) — a session id belongs to one
+            # person, so a repeat means the same file arrived twice under two
+            # names, not two people doing the same turn. Count it once.
+            key = r.get("turn_key")
+            if key:
+                if key in seen:
+                    continue
+                seen.add(key)
             d = (r.get("ts") or "")[:10]
             if args.month and not d.startswith(args.month):
                 continue
@@ -72,6 +111,8 @@ def load(args):
             if args.repo and args.repo not in (r.get("repo") or ""):
                 continue
             if args.agent and r.get("agent") != args.agent:
+                continue
+            if args.owner and r["_owner"] != args.owner:
                 continue
             rows.append(r)
     return rows
@@ -115,13 +156,16 @@ def summary_table(rows, pricing):
 
 
 def detail_table(rows, pricing, limit=200):
-    out = ["| วันเวลา | Agent | Repo | งานที่สั่ง | Credit | Token | เวลา | Tools | ไฟล์ที่แตะ |",
-           "|---|---|---|---|--:|--:|--:|--:|--:|"]
+    multi = len({r.get("_owner") for r in rows}) > 1
+    head = "| วันเวลา |" + (" คน |" if multi else "") + " Agent | Repo | งานที่สั่ง | Credit | Token | เวลา | Tools | ไฟล์ที่แตะ |"
+    out = [head, "|---|" + ("---|" if multi else "") + "---|---|---|--:|--:|--:|--:|--:|"]
     for r in sorted(rows, key=lambda x: x.get("ts", ""), reverse=True)[:limit]:
         prompt = (r.get("prompt") or "").replace("|", "\\|").replace("\n", " ")[:90]
         el = f"{r['elapsed_sec']:.0f}s" if r.get("elapsed_sec") else "—"
         out.append(
-            f"| {(r.get('ts') or '')[:16].replace('T',' ')} | {r.get('agent','')} "
+            f"| {(r.get('ts') or '')[:16].replace('T',' ')} |"
+            + (f" {r.get('_owner','')} |" if multi else "")
+            + f" {r.get('agent','')} "
             f"| {r.get('repo','')} | {prompt} | {r.get('credit') if r.get('credit') is not None else '—'} "
             f"| {fmt(r.get('total_tokens',0))} | {el} | {r.get('n_tool_calls',0)} "
             f"| {len(r.get('files_touched') or [])} |"
@@ -134,6 +178,12 @@ def main():
     ap.add_argument("--month"); ap.add_argument("--since"); ap.add_argument("--until")
     ap.add_argument("--repo"); ap.add_argument("--agent", choices=["codebuddy", "claude"])
     ap.add_argument("--compare", action="store_true")
+    ap.add_argument("--ledger", nargs="+", metavar="PATH",
+                    help="อ่าน ledger จากไฟล์/glob อื่น เช่น --ledger 'team/ledger-*.jsonl' "
+                         "(เจ้าของมาจากชื่อไฟล์ ledger-<ชื่อ>.jsonl)")
+    ap.add_argument("--by-owner", action="store_true",
+                    help="แยกตามคน (อัตโนมัติอยู่แล้วถ้ามีมากกว่า 1 คน)")
+    ap.add_argument("--owner", help="เอาเฉพาะคนนี้")
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--limit", type=int, default=200)
     args = ap.parse_args()
@@ -170,6 +220,24 @@ def main():
                 md.append(f"| {repo} | {ag} | {a['turns']} "
                           f"| {round(a['credit'],2) if a['has_credit'] else '—'} "
                           f"| {fmt(a['tok'])} | {a['sec']/60:.1f} นาที |")
+        md.append("")
+
+    owners = {r["_owner"] for r in rows}
+    if args.by_owner or len(owners) > 1:
+        by = defaultdict(lambda: defaultdict(list))
+        for r in rows:
+            by[r["_owner"]][r.get("agent", "?")].append(r)
+        md += ["## แยกตามคน", "", "| คน | Agent | รอบ | Credit | Token | เวลารวม | Repo ที่แตะ |",
+               "|---|---|--:|--:|--:|--:|---|"]
+        for who in sorted(by):
+            for ag in sorted(by[who]):
+                grp = by[who][ag]
+                a = agg(grp, pricing)
+                repos = sorted({g.get("repo") or "?" for g in grp})
+                shown = ", ".join(repos[:4]) + (f" +{len(repos)-4}" if len(repos) > 4 else "")
+                md.append(f"| {who} | {ag} | {a['turns']} "
+                          f"| {round(a['credit'],2) if a['has_credit'] else '—'} "
+                          f"| {fmt(a['tok'])} | {a['sec']/60:.1f} นาที | {shown} |")
         md.append("")
 
     md += ["## รายรอบ", "", detail_table(rows, pricing, args.limit), ""]

@@ -47,7 +47,11 @@ python3 ~/.claude/skills/agent-cost/scripts/report.py --compare            # เ
 python3 ~/.claude/skills/agent-cost/scripts/report.py --month 2026-09 --write   # เขียนลง wiki
 python3 ~/.claude/skills/agent-cost/scripts/report.py --repo my-service  # เฉพาะ repo
 python3 ~/.claude/skills/agent-cost/scripts/report.py --since 2026-09-01 --agent codebuddy
+python3 ~/.claude/skills/agent-cost/scripts/report.py --ledger 'team/ledger-*.jsonl' --by-owner  # รวมของทั้งทีม
 ```
+
+`--ledger` รับ glob ของ ledger คนอื่นที่ขอมา ชื่อคนอ่านจากชื่อไฟล์ `ledger-<ชื่อ>.jsonl`
+ไฟล์ซ้ำไม่นับซ้ำ (dedupe ด้วย `turn_key`) · `--owner <ชื่อ>` เจาะรายคน
 
 `--write` เขียน `<เดือน>.md` ลง wiki — ที่เหลือพิมพ์ออก stdout เฉย ๆ
 

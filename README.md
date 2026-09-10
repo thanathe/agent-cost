@@ -38,6 +38,28 @@ python3 $R --month 2026-09 --write   # เขียน <เดือน>.md ล�
 
 หรือถาม agent ตรง ๆ ว่า "เดือนนี้ใช้ credit ไปเท่าไหร่" — skill จะพาไปเอง
 
+## รวม log ของทั้งทีม
+
+ledger เป็นไฟล์เดียว ส่งให้กันได้ตรง ๆ — ฝั่งคนส่ง:
+
+```bash
+cp "$(python3 -c 'import sys,os;sys.path.insert(0,os.path.expanduser("~/.claude/skills/agent-cost/scripts"));import cost_paths;print(os.path.join(cost_paths.ledger_dir(),"ledger.jsonl"))')" ~/Desktop/ledger-<ชื่อเรา>.jsonl
+```
+
+ฝั่งคนรวม เอามากองไว้โฟลเดอร์เดียวแล้ว:
+
+```bash
+python3 ~/.claude/skills/agent-cost/scripts/report.py --ledger 'team/ledger-*.jsonl' --by-owner
+python3 ~/.claude/skills/agent-cost/scripts/report.py --ledger 'team/ledger-*.jsonl' --owner preaw   # เจาะคนเดียว
+```
+
+ชื่อคนมาจากชื่อไฟล์ (`ledger-preaw.jsonl` → preaw) ไม่ต้องไปแก้ข้อมูลใคร
+ไฟล์เดียวกันส่งมาซ้ำสองชื่อก็ไม่นับซ้ำ — dedupe ด้วย `turn_key`
+
+> บอกน้อง ๆ ก่อนว่าไฟล์นี้มี prompt ที่เขาพิมพ์กับ path ไฟล์ที่ agent แตะอยู่ด้วย
+> ใครไม่อยากส่ง prompt ให้รัน `install.py --no-prompts` แล้วส่งเฉพาะรอบหลังจากนั้น หรือกรองออกก่อนส่ง:
+> `jq -c '.prompt = ""' ledger.jsonl > ledger-<ชื่อ>.jsonl`
+
 ## เก็บอะไรได้ / ไม่ได้
 
 | | CodeBuddy CLI (`cbc`) | CodeBuddy IDE | Claude Code |
