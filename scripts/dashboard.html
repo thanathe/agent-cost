@@ -82,6 +82,8 @@ tr:last-child td{border-bottom:0}
 .pill.warn{color:var(--warn);background:var(--warn-bg)}
 .pill.ok{color:var(--ok);background:var(--ok-bg)}
 .pill.info{color:var(--ink-2);background:var(--sunk)}
+.pill.cat{color:var(--cat-fg,var(--ink-2));background:var(--sunk);white-space:nowrap;border:1px solid var(--line)}
+.pill.cat::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cat-fg);margin-right:5px;vertical-align:0}
 .finding b{font-weight:600}
 .finding p{margin:2px 0 0;color:var(--ink-2);max-width:80ch}
 code{font-family:var(--mono);font-size:12px;background:var(--sunk);padding:1px 5px;border-radius:4px}
@@ -135,6 +137,7 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
       <label class="field" id="f-plancx" hidden>แพ็ก Codex (USD/เดือน)<input id="plancx" type="number" step="1" min="0" placeholder="ไม่มี"></label>
       <label class="field">เฉลี่ยค่าแพ็ก<select id="basis"><option value="calendar">ทุกวันในปฏิทิน</option><option value="20">วันที่ใช้ ÷ 20 วัน/เดือน</option><option value="22">วันที่ใช้ ÷ 22 วัน/เดือน</option></select></label>
       <label class="field">CodeBuddy<select id="cbsrc"><option value="all">CLI + IDE</option><option value="cli">CLI เท่านั้น</option><option value="ide">IDE เท่านั้น</option></select></label>
+      <label class="field">หมวดงาน<select id="cat"><option value="all">ทั้งหมด</option></select></label>
       <label class="field">ช่วงวัน<select id="span"><option value="0">ทั้งหมด</option><option value="1">วันนี้</option><option value="7">7 วัน</option><option value="30">30 วัน</option><option value="custom">กำหนดเอง</option></select></label>
       <label class="field" id="f-from" hidden>จาก<input id="from" type="date"></label>
       <label class="field" id="f-to" hidden>ถึง<input id="to" type="date"></label>
@@ -155,6 +158,7 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
   <div class="row-h"><h2>ใช้ไปกับงานแบบไหน</h2>
     <div class="row-h" style="gap:10px">
       <div class="seg" id="cat-agent" role="group" aria-label="เลือก agent ของหมวดหมู่"></div>
+      <div class="seg" id="cat-sort" role="group" aria-label="เรียงหมวด"><button data-s="turns">รอบ</button><button data-s="money">เงิน</button></div>
       <span class="tag">เดาจาก prompt + tool + ไฟล์ที่แตะ — คร่าว ๆ</span>
     </div>
   </div>
@@ -201,7 +205,7 @@ const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">"
 const store = { get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}} };
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
-let planCxUsd = null, fxRate = null, fromDay = "", toDay = "", cbSource = "all", ALL = [], PRICING = {}, creditUsd = null, planUsd = null, planBasis = "calendar", spanDays = 0, newKeys = new Set(), knownKeys = null;
+let catFilter = "all", catSort = "turns", CATMAP = new Map(), planCxUsd = null, fxRate = null, fromDay = "", toDay = "", cbSource = "all", ALL = [], PRICING = {}, creditUsd = null, planUsd = null, planBasis = "calendar", spanDays = 0, newKeys = new Set(), knownKeys = null;
 let ROWS = [], CB = [], CL = [], CX = [];
 
 const ctx = r => (r.input_tokens||0)+(r.cache_read_tokens||0)+(r.cache_write_tokens||0);
@@ -345,7 +349,15 @@ function setCategories(cfg){
   CAT_LABEL = cfg.labels || CAT_LABEL;
   EDIT_TOOLS = cfg.edit_tools || EDIT_TOOLS;
   CODE_EXT = new RegExp(cfg.code_ext || "$^", "i");
+  const sel=$("#cat");
+  if(sel && sel.options.length<=1){
+    Object.entries(CAT_LABEL).forEach(([k,l])=>sel.add(new Option(l,k)));
+    const saved=store.get("ac-cat"); if(saved && CAT_LABEL[saved]){ catFilter=saved; sel.value=saved; }
+  }
 }
+// One classification per ledger snapshot, so filter, pills and bars always agree.
+const catOf = r => CATMAP.get(r.turn_key) || "other";
+const catPill = key => `<span class="pill cat" style="--cat-fg:${CAT_COLOR[key]||"var(--ink-3)"}">${esc(CAT_LABEL[key]||key)}</span>`;
 function category(r){
   const p = r.prompt || "";
   for(const [key,label,re] of CATS) if(re.test(p)) return key;
@@ -376,10 +388,13 @@ function renderCats(){
   $("#cat-agent").innerHTML = opts.map(([a,l])=>`<button data-c="${a}" aria-pressed="${a===catAgent}">${l}</button>`).join("");
   $("#cat-agent").querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ catAgent=b.dataset.c; store.set("ac-catagent",catAgent); renderCats(); }));
   const rows = catAgent==="all" ? ROWS : ROWS.filter(r=>r.agent===catAgent);
-  const by=new Map(), cat=categories(rows);
-  rows.forEach(r=>{ const k=cat.get(r.turn_key)||"other"; const o=by.get(k)||{n:0,credit:0,usd:0,tok:0}; o.n++; o.credit+=r.credit||0;
+  const by=new Map();
+  rows.forEach(r=>{ const k=catOf(r); const o=by.get(k)||{n:0,credit:0,usd:0,tok:0}; o.n++; o.credit+=r.credit||0;
     o.usd+=(r.agent==="codebuddy"?cbUsd(r):apiUsd(r))||0; o.tok+=tokAll(r); by.set(k,o); });
-  const list=[...by.entries()].sort((a,b)=>b[1].n-a[1].n);
+  $("#cat-sort").querySelectorAll("button").forEach(b=>{ b.setAttribute("aria-pressed", String(b.dataset.s===catSort));
+    b.onclick=()=>{ catSort=b.dataset.s; store.set("ac-catsort",catSort); renderCats(); }; });
+  const money=o=>o.usd || o.credit*(creditUsd||0) || o.credit/1000;
+  const list=[...by.entries()].sort((a,b)=> catSort==="money" ? money(b[1])-money(a[1]) : b[1].n-a[1].n);
   const max=Math.max(1,...list.map(([,o])=>o.n)), total=rows.length||1;
   $("#cats").innerHTML = list.map(([k,o])=>`<div class="bar-row">
       <span>${CAT_LABEL[k]}</span>
@@ -421,8 +436,8 @@ const costCell = r => r.agent==="codebuddy" ? `${fmt(r.credit,2)} cr` : (apiUsd(
 function renderLatest(){
   const rs=[...ROWS].sort((x,y)=>x.ts<y.ts?1:-1).slice(0,10);
   $("#latest-n").textContent = `${fmt(ROWS.length)} รอบในช่วงนี้`;
-  $("#latest").innerHTML = `<thead><tr><th>เวลา</th><th>Agent</th><th>Repo</th><th>งานที่สั่ง</th><th class="n">Credit / มูลค่า API</th><th class="n">Token</th><th class="n">เวลา</th></tr></thead><tbody>`+
-    rs.map(r=>`<tr class="${newKeys.has(r.turn_key)?"fresh":""}"><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td style="white-space:nowrap">${agentCell(r.agent,r)}</td><td>${esc(r.repo)}</td><td class="p">${esc(r.prompt||"—")}${errPill(r)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
+  $("#latest").innerHTML = `<thead><tr><th>เวลา</th><th>Agent</th><th>Repo</th><th>หมวด</th><th>งานที่สั่ง</th><th class="n">Credit / มูลค่า API</th><th class="n">Token</th><th class="n">เวลา</th></tr></thead><tbody>`+
+    rs.map(r=>`<tr class="${newKeys.has(r.turn_key)?"fresh":""}"><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td style="white-space:nowrap">${agentCell(r.agent,r)}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}${errPill(r)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
 }
 function errPill(r){
   const bits=[]; if(r.n_api_errors) bits.push(`API error ×${r.n_api_errors}`);
@@ -430,11 +445,12 @@ function errPill(r){
   return bits.length ? ` <span class="pill warn" title="${esc(r.error||"")}">${bits.join(" · ")}</span>` : "";
 }
 
+function topCat(rows){ const c=new Map(); rows.forEach(r=>c.set(catOf(r),(c.get(catOf(r))||0)+1)); return [...c].sort((a,b)=>b[1]-a[1])[0]?.[0]||"other"; }
 function renderRepos(){
   const m=new Map(); ROWS.forEach(r=>{ const k=r.repo+"|"+r.agent+"|"+(r.source||""); (m.get(k)||m.set(k,{repo:r.repo,agent:r.agent,source:r.source,rows:[]}).get(k)).rows.push(r); });
   const list=[...m.values()].map(o=>({...o,s:agg(o.rows)})).sort((x,y)=>(x.agent===y.agent?0:x.agent==="codebuddy"?-1:1)||(x.agent==="codebuddy"?y.s.credit-x.s.credit:y.s.ctx-x.s.ctx));
-  $("#repos").innerHTML = `<thead><tr><th>Repo</th><th>Agent</th><th class="n">รอบ</th><th class="n">Credit</th><th class="n">มูลค่า API</th><th class="n">Token</th><th class="n">Output</th><th class="n">เวลา</th></tr></thead><tbody>`+
-    list.map(o=>`<tr><td>${esc(o.repo)}</td><td style="white-space:nowrap">${agentCell(o.agent,{source:o.source})}</td><td class="n">${o.s.n}</td><td class="n">${o.agent==="codebuddy"?fmt(o.s.credit,2):"—"}</td><td class="n">${o.s.hasApi?"$"+fmt(o.s.api,2):"—"}</td><td class="n">${fM(o.s.ctx+o.s.out)}</td><td class="n">${fM(o.s.out)}</td><td class="n">${fmt(o.s.sec/60,0)} น.</td></tr>`).join("")+"</tbody>";
+  $("#repos").innerHTML = `<thead><tr><th>Repo</th><th>Agent</th><th>หมวดหลัก</th><th class="n">รอบ</th><th class="n">Credit</th><th class="n">มูลค่า API</th><th class="n">Token</th><th class="n">Output</th><th class="n">เวลา</th></tr></thead><tbody>`+
+    list.map(o=>`<tr><td>${esc(o.repo)}</td><td style="white-space:nowrap">${agentCell(o.agent,{source:o.source})}</td><td>${catPill(topCat(o.rows))}</td><td class="n">${o.s.n}</td><td class="n">${o.agent==="codebuddy"?fmt(o.s.credit,2):"—"}</td><td class="n">${o.s.hasApi?"$"+fmt(o.s.api,2):"—"}</td><td class="n">${fM(o.s.ctx+o.s.out)}</td><td class="n">${fM(o.s.out)}</td><td class="n">${fmt(o.s.sec/60,0)} น.</td></tr>`).join("")+"</tbody>";
 }
 
 let topAgent = store.get("ac-top") || "codebuddy";
@@ -444,18 +460,20 @@ function renderTop(){
   document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.a===topAgent)));
   const score = r => topAgent!=="codebuddy" ? (apiUsd(r) ?? tokAll(r)/1e9) : (r.credit||0);
   const rs=(topAgent==="codex"?CX:topAgent==="claude"?CL:CB).slice().sort((x,y)=>score(y)-score(x)).slice(0,12);
-  $("#top").innerHTML = `<thead><tr><th>เวลา</th><th>Repo</th><th>งานที่สั่ง</th><th>Model</th><th class="n">${topAgent!=="codebuddy"?"มูลค่า API":"Credit"}</th><th class="n">Token</th><th class="n">Tools</th><th class="n">เวลา</th></tr></thead><tbody>`+
-    rs.map(r=>`<tr><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td>${esc(r.repo)}</td><td class="p">${esc(r.prompt||"—")}</td><td class="mono">${esc(r.model)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${r.n_tool_calls||0}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
+  $("#top").innerHTML = `<thead><tr><th>เวลา</th><th>Repo</th><th>หมวด</th><th>งานที่สั่ง</th><th>Model</th><th class="n">${topAgent!=="codebuddy"?"มูลค่า API":"Credit"}</th><th class="n">Token</th><th class="n">Tools</th><th class="n">เวลา</th></tr></thead><tbody>`+
+    rs.map(r=>`<tr><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}</td><td class="mono">${esc(r.model)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${r.n_tool_calls||0}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
 }
 
 function filterRows(){
   if(spanDays==="custom"){
     ROWS=ALL.filter(r=>{ const d=r.ts.slice(0,10); return (!fromDay || d>=fromDay) && (!toDay || d<=toDay); });
   } else if(!spanDays){ ROWS=ALL; } else { const d=new Date(); d.setDate(d.getDate()-(spanDays-1)); const from=dayKey(d); ROWS=ALL.filter(r=>r.ts.slice(0,10)>=from); }
+  if(catFilter!=="all") ROWS = ROWS.filter(r=>catOf(r)===catFilter);
   const isIde = r => r.source==="ide";
   CB=ROWS.filter(r=>r.agent==="codebuddy" && (cbSource==="all" || (cbSource==="ide")===isIde(r))); CL=ROWS.filter(r=>r.agent==="claude"); CX=ROWS.filter(r=>r.agent==="codex");
 }
 function renderAll(){
+  CATMAP = categories(ALL);
   filterRows();
   const ds=ROWS.map(r=>r.ts).sort(); $("#range").textContent = ds.length ? ds[0].slice(0,10)+" → "+ds.at(-1).slice(0,10) : "ไม่มีข้อมูลในช่วงนี้";
   $("#f-plancx").hidden = !CX.length;
@@ -505,6 +523,8 @@ function applyPlanDefault(){
   const fxs=parseFloat(store.get("ac-fx")); if(fxs>0){ fxRate=fxs; $("#fx").value=fxs; }
   $("#fx").addEventListener("input",e=>{ const v=parseFloat(e.target.value); fxRate=v>0?v:null; store.set("ac-fx", fxRate?String(fxRate):""); renderAll(); });
   catAgent = store.get("ac-catagent") || "all";
+  catSort = store.get("ac-catsort") || "turns";
+  $("#cat").addEventListener("change",e=>{ catFilter=e.target.value; store.set("ac-cat",catFilter); renderAll(); });
   const cs=store.get("ac-cbsrc"); if(cs){ cbSource=cs; $("#cbsrc").value=cs; }
   $("#cbsrc").addEventListener("change",e=>{ cbSource=e.target.value; store.set("ac-cbsrc",cbSource); renderAll(); });
   const bs=store.get("ac-basis"); if(bs){ planBasis=bs; $("#basis").value=bs; }
