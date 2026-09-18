@@ -1,0 +1,19 @@
+scripts/capture.py
+  s_afcb2cf26c1eec::t_09bfbe0ce76c53 45-49,216,283-284,306-307,327,451-452
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ab17f7dd39bdf7e68118065cf4f173c4ea4dac4b",
+  "prompts": {},
+  "sessions": {
+    "s_afcb2cf26c1eec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aea1b4f5-62fc-4411-90d7-2ffa085fa974",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "natthaphon.kha <natthaphon.kha@skyai.co.th>"
+    }
+  }
+}
