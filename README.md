@@ -325,6 +325,10 @@ python3 ~/.claude/skills/agent-cost/scripts/install.py --uninstall
 
 Removes the hooks and the skill links. Your ledger stays; delete it yourself if you want it gone.
 
+## Benchmarks
+
+`bench/` holds small harnesses for comparing agents head-to-head on the same task — see [bench/README.md](bench/README.md).
+
 ## Contributing
 
 Issues and pull requests are welcome — wrong numbers, another agent, a confusing paragraph. See

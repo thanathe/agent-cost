@@ -299,6 +299,10 @@ python3 ~/.claude/skills/agent-cost/scripts/install.py --uninstall
 
 เอา hook กับ symlink ออก · ledger เดิมยังอยู่ อยากลบค่อยลบเอง
 
+## Benchmark
+
+`bench/` มีสคริปต์เทียบ agent แบบตัวต่อตัวบนงานเดียวกัน (รีวิว PR, สร้างหน้าเว็บ) พร้อมวัดคุณภาพ · เวลา · ค่าใช้จ่าย — ดู [bench/README.md](bench/README.md)
+
 ## ส่ง PR
 
 ยินดีรับ issue และ PR ทุกขนาด — ตัวเลขผิด, อยากให้รองรับ agent อื่น, ย่อหน้าไหนอ่านแล้วงง

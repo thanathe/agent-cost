@@ -1,0 +1,18 @@
+{
+  "_comment": "USD per 1M tokens [input, output]. VERIFY against current provider pricing before trusting the derived cost column.",
+  "gemini-3.1-pro":        [2.00, 12.00],
+  "gemini-3.5-flash":      [0.30,  2.50],
+  "gemini-3.0-flash":      [0.30,  2.50],
+  "gemini-2.5-pro":        [1.25, 10.00],
+  "gemini-2.5-flash":      [0.30,  2.50],
+  "gemini-3.1-flash-lite": [0.10,  0.40],
+  "gpt-5.5":               [1.25, 10.00],
+  "gpt-5.4":               [1.25, 10.00],
+  "gpt-5.3-codex":         [1.25, 10.00],
+  "gpt-5.1-codex":         [1.25, 10.00],
+  "gpt-5.1-codex-mini":    [0.25,  2.00],
+  "deepseek-v3-2-volc":    [0.28,  0.42],
+  "glm-5.0":               [0.60,  2.20],
+  "kimi-k2.5":             [0.60,  2.50],
+  "default-model":         [1.25, 10.00]
+}

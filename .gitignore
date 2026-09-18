@@ -14,3 +14,4 @@ pricing.json
 codex-ledger.jsonl
 codex-ledger.tmp
 codex-ledger.lock
+bench/results/
