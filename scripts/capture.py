@@ -42,6 +42,11 @@ IDLE_GAP_SEC = 1800  # a silence longer than this inside a turn is waiting, not 
 # other API error from here — the tokens were already spent either way.
 API_ERROR_RE = re.compile(r"^(API Error|aborted$|<html>|\s*<system-reminder data-role=\"error-recovery)", re.I)
 WORK_EVENTS = {"user", "assistant", "message", "reasoning", "function_call", "function_call_result"}
+# Serena is an MCP server (oraios/serena) driven from Claude Code / CodeBuddy, so its
+# cost is already inside the parent turn — but "how much of my work went through
+# serena" is a question of its own. Any tool name containing "serena" counts
+# (Claude writes mcp__serena__<tool>; custom server names keep the word "serena").
+SERENA_TOOL_RE = re.compile(r"serena", re.I)
 
 
 def log(*a):
@@ -208,6 +213,7 @@ def collect(turn):
     tok = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
     model = None
     tools, files = [], []
+    serena_calls = 0
     stamps = []
     # Claude Code writes ONE event per content block (thinking / text / tool_use)
     # and repeats the same `message.usage` on each — summing blindly overcounts
@@ -274,6 +280,8 @@ def collect(turn):
             name = ev.get("name")
             if name:
                 tools.append(name)
+                if SERENA_TOOL_RE.search(name):
+                    serena_calls += 1
             args = ev.get("arguments")
             if isinstance(args, str):
                 try:
@@ -295,6 +303,8 @@ def collect(turn):
                         seen_tools.add(tkey)
                     if blk.get("name"):
                         tools.append(blk["name"])
+                        if SERENA_TOOL_RE.search(blk["name"]):
+                            serena_calls += 1
                     inp = blk.get("input") or {}
                     p = inp.get("file_path") or inp.get("path")
                     if p:
@@ -314,6 +324,7 @@ def collect(turn):
         "tool_errors": tool_errors,
         "api_errors": api_errors,
         "elapsed_sec": elapsed,
+        "serena_calls": serena_calls,
     }
 
 
@@ -437,6 +448,8 @@ def build_record(events, prompts, start, tpath, session_id, cwd, ts):
         "error": facts["api_errors"][0] if facts["api_errors"] else None,
         "n_tool_calls": len(facts["tools"]),
         "tools": sorted(set(facts["tools"])),
+        "n_serena_calls": facts["serena_calls"],
+        "serena_tools": sorted({t for t in facts["tools"] if SERENA_TOOL_RE.search(t)}),
         "files_touched": facts["files"][:40],
         "transcript": tpath,
     }

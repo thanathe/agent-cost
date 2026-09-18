@@ -103,6 +103,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--sunk);padding:1px 5
 @media (prefers-reduced-motion:reduce){.pulse{animation:none}}
 .field select{font-family:var(--sans);font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
 .field select:focus-visible{outline:2px solid var(--cb);outline-offset:2px}
+.checks{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+.checks label{display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none}
 .split{margin:0;font-size:12px;color:var(--ink-2);border-top:1px solid var(--line);padding-top:10px}
 .split .sw{width:8px;height:8px;margin-right:4px}
 .split .sep{color:var(--line);margin:0 6px}
@@ -136,7 +138,15 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
       <label class="field">แพ็ก Claude (USD/เดือน)<input id="plan" type="number" step="1" min="0" placeholder="ไม่มี"></label>
       <label class="field" id="f-plancx" hidden>แพ็ก Codex (USD/เดือน)<input id="plancx" type="number" step="1" min="0" placeholder="ไม่มี"></label>
       <label class="field">เฉลี่ยค่าแพ็ก<select id="basis"><option value="calendar">ทุกวันในปฏิทิน</option><option value="20">วันที่ใช้ ÷ 20 วัน/เดือน</option><option value="22">วันที่ใช้ ÷ 22 วัน/เดือน</option></select></label>
-      <label class="field">CodeBuddy<select id="cbsrc"><option value="all">CLI + IDE</option><option value="cli">CLI เท่านั้น</option><option value="ide">IDE เท่านั้น</option></select></label>
+      <label class="field">ประเภทที่แสดง
+        <div class="checks" id="agents">
+          <label><input type="checkbox" data-k="cli"><i class="sw" style="background:var(--cb)"></i>CodeBuddy CLI</label>
+          <label><input type="checkbox" data-k="ide"><i class="sw" style="background:var(--ide)"></i>CodeBuddy IDE</label>
+          <label><input type="checkbox" data-k="claude"><i class="sw" style="background:var(--claude)"></i>Claude</label>
+          <label><input type="checkbox" data-k="codex"><i class="sw" style="background:var(--codex)"></i>Codex</label>
+          <label><input type="checkbox" data-k="serena">เฉพาะรอบที่ใช้ serena</label>
+        </div>
+      </label>
       <label class="field">หมวดงาน<select id="cat"><option value="all">ทั้งหมด</option></select></label>
       <label class="field">ช่วงวัน<select id="span"><option value="0">ทั้งหมด</option><option value="1">วันนี้</option><option value="7">7 วัน</option><option value="30">30 วัน</option><option value="custom">กำหนดเอง</option></select></label>
       <label class="field" id="f-from" hidden>จาก<input id="from" type="date"></label>
@@ -205,7 +215,10 @@ const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">"
 const store = { get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}} };
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
-let catFilter = "all", catSort = "turns", CATMAP = new Map(), planCxUsd = null, fxRate = null, fromDay = "", toDay = "", cbSource = "all", ALL = [], PRICING = {}, creditUsd = null, planUsd = null, planBasis = "calendar", spanDays = 0, newKeys = new Set(), knownKeys = null;
+let catFilter = "all", catSort = "turns", CATMAP = new Map(), planCxUsd = null, fxRate = null, fromDay = "", toDay = "", ALL = [], PRICING = {}, creditUsd = null, planUsd = null, planBasis = "calendar", spanDays = 0, newKeys = new Set(), knownKeys = null;
+// Which agent types are shown (checkboxes). "serena" is an overlay, not an agent:
+// it narrows every bucket to turns that called serena tools via MCP.
+let agentChk = {cli:true, ide:true, claude:true, codex:true}, serenaOnly = false;
 let ROWS = [], CB = [], CL = [], CX = [];
 
 const ctx = r => (r.input_tokens||0)+(r.cache_read_tokens||0)+(r.cache_write_tokens||0);
@@ -260,7 +273,7 @@ function renderDuel(){
   const cbExtra = srcLine + `<p class="split">Claude สั่งให้ทำ <b>${fmt(viaRows.length)}</b> รอบ · ${fmt(viaCr,1)} credit (${a.credit?fmt(viaCr/a.credit*100,0):0}%) — ที่เหลือพิมพ์สั่งเอง</p>`;
   const subRows=CL.filter(r=>r.n_subagents), subTok=CL.reduce((t,r)=>t+(r.subagent_tokens||0),0);
   const clExtra = `<p class="split">subagent ${fmt(subRows.length)} รอบ · ${fM(subTok)} token (${(b.ctx+b.out)?fmt(subTok/(b.ctx+b.out)*100,0):0}% ของ token)</p>`;
-  const cbName = cbSource==="cli" ? "CodeBuddy CLI" : cbSource==="ide" ? "CodeBuddy IDE" : "CodeBuddy";
+  const cbName = !agentChk.cli && agentChk.ide ? "CodeBuddy IDE" : agentChk.cli && !agentChk.ide ? "CodeBuddy CLI" : "CodeBuddy";
   // Codex only gets a column for people who actually use it.
   const cx=agg(CX), cxCost=codexCost(), cxPc=planCost(CX, planCxUsd);
   const cxBig = planCxUsd ? `${usdThb(cxPc.usd)}<small>${planBasis==="calendar"?"จ่ายจริง · "+cxPc.n+" วันปฏิทิน":"ใช้ "+cxPc.n+" วัน × $"+fmt(planCxUsd/Number(planBasis),2)}</small>`
@@ -419,6 +432,13 @@ function renderFindings(){
   }
   const noise=CB.filter(isNoise);
   if(noise.length) F.push(["warn","รอบที่ label เป็นคำสั่งหรือว่าง", `${noise.length} รอบของ CodeBuddy (${fmt(noise.reduce((s,r)=>s+(r.credit||0),0),1)} credit) ไม่มี prompt ที่อ่านรู้เรื่อง — ถ้าเพิ่งอัปเดตสคริปต์ ลอง <code>capture.py --rebuild</code>`]);
+  // serena is driven over MCP by Claude/CodeBuddy, so its cost lives inside the parent
+  // turns already — this line only says how much of the work went through it.
+  const ser=ROWS.filter(r=>(r.n_serena_calls||0)>0);
+  if(ser.length){
+    const serCalls=ser.reduce((t,r)=>t+r.n_serena_calls,0), serTok=ser.reduce((t,r)=>t+tokAll(r),0), serCr=ser.reduce((t,r)=>t+(r.credit||0),0);
+    F.push(["info","serena ถูกใช้ผ่าน MCP", `${fmt(ser.length)} รอบจาก ${fmt(ROWS.length)} รอบ เรียก serena tools รวม ${fmt(serCalls)} ครั้ง · ${fM(serTok)} token${serCr?` · ${fmt(serCr,1)} credit`:""} — ค่าใช้จ่ายนับอยู่ในรอบของ agent แม่แล้ว ไม่นับซ้ำ`]);
+  }
   // A model switch inside a session forces a full cache miss on the next call.
   const switches=[]; const bySess=new Map(); [...CB,...CL].sort((x,y)=>x.ts<y.ts?-1:1).forEach(r=>{ const p=bySess.get(r.session_id); if(p&&p.model&&r.model&&p.model!==r.model) switches.push(r); bySess.set(r.session_id,r); });
   if(switches.length){ const cr=switches.reduce((s,r)=>s+(r.credit||0),0);
@@ -437,13 +457,14 @@ function renderLatest(){
   const rs=[...ROWS].sort((x,y)=>x.ts<y.ts?1:-1).slice(0,10);
   $("#latest-n").textContent = `${fmt(ROWS.length)} รอบในช่วงนี้`;
   $("#latest").innerHTML = `<thead><tr><th>เวลา</th><th>Agent</th><th>Repo</th><th>หมวด</th><th>งานที่สั่ง</th><th class="n">Credit / มูลค่า API</th><th class="n">Token</th><th class="n">เวลา</th></tr></thead><tbody>`+
-    rs.map(r=>`<tr class="${newKeys.has(r.turn_key)?"fresh":""}"><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td style="white-space:nowrap">${agentCell(r.agent,r)}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}${errPill(r)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
+    rs.map(r=>`<tr class="${newKeys.has(r.turn_key)?"fresh":""}"><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td style="white-space:nowrap">${agentCell(r.agent,r)}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}${errPill(r)}${serenaPill(r)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
 }
 function errPill(r){
   const bits=[]; if(r.n_api_errors) bits.push(`API error ×${r.n_api_errors}`);
   if(r.n_tool_errors) bits.push(`tool error ×${r.n_tool_errors}`); if(r.resumed) bits.push("resume ต่อ");
   return bits.length ? ` <span class="pill warn" title="${esc(r.error||"")}">${bits.join(" · ")}</span>` : "";
 }
+const serenaPill = r => (r.n_serena_calls||0) ? ` <span class="pill info" title="${esc((r.serena_tools||[]).join(" "))}">serena ×${r.n_serena_calls}</span>` : "";
 
 function topCat(rows){ const c=new Map(); rows.forEach(r=>c.set(catOf(r),(c.get(catOf(r))||0)+1)); return [...c].sort((a,b)=>b[1]-a[1])[0]?.[0]||"other"; }
 function renderRepos(){
@@ -469,8 +490,11 @@ function filterRows(){
     ROWS=ALL.filter(r=>{ const d=r.ts.slice(0,10); return (!fromDay || d>=fromDay) && (!toDay || d<=toDay); });
   } else if(!spanDays){ ROWS=ALL; } else { const d=new Date(); d.setDate(d.getDate()-(spanDays-1)); const from=dayKey(d); ROWS=ALL.filter(r=>r.ts.slice(0,10)>=from); }
   if(catFilter!=="all") ROWS = ROWS.filter(r=>catOf(r)===catFilter);
+  if(serenaOnly) ROWS = ROWS.filter(r=>(r.n_serena_calls||0)>0);
   const isIde = r => r.source==="ide";
-  CB=ROWS.filter(r=>r.agent==="codebuddy" && (cbSource==="all" || (cbSource==="ide")===isIde(r))); CL=ROWS.filter(r=>r.agent==="claude"); CX=ROWS.filter(r=>r.agent==="codex");
+  CB=ROWS.filter(r=>r.agent==="codebuddy" && (isIde(r)?agentChk.ide:agentChk.cli));
+  CL=agentChk.claude ? ROWS.filter(r=>r.agent==="claude") : [];
+  CX=agentChk.codex ? ROWS.filter(r=>r.agent==="codex") : [];
 }
 function renderAll(){
   CATMAP = categories(ALL);
@@ -524,9 +548,20 @@ function applyPlanDefault(){
   $("#fx").addEventListener("input",e=>{ const v=parseFloat(e.target.value); fxRate=v>0?v:null; store.set("ac-fx", fxRate?String(fxRate):""); renderAll(); });
   catAgent = store.get("ac-catagent") || "all";
   catSort = store.get("ac-catsort") || "turns";
+  try{ const savedA=JSON.parse(store.get("ac-agents")||"null"); if(savedA){ agentChk={...agentChk, ...savedA}; serenaOnly=!!savedA.serena; } }catch(e){}
+  // Migrate the old CLI/IDE select ("ac-cbsrc") into checkboxes so no preference is lost.
+  if(store.get("ac-agents")===null){ const cs=store.get("ac-cbsrc");
+    if(cs==="cli"||cs==="ide"){ agentChk.cli=cs==="cli"; agentChk.ide=cs==="ide"; store.set("ac-agents", JSON.stringify({...agentChk, serena:false})); }
+    store.set("ac-cbsrc",""); }
   $("#cat").addEventListener("change",e=>{ catFilter=e.target.value; store.set("ac-cat",catFilter); renderAll(); });
-  const cs=store.get("ac-cbsrc"); if(cs){ cbSource=cs; $("#cbsrc").value=cs; }
-  $("#cbsrc").addEventListener("change",e=>{ cbSource=e.target.value; store.set("ac-cbsrc",cbSource); renderAll(); });
+  $("#agents").querySelectorAll("input").forEach(i=>{
+    i.checked = i.dataset.k==="serena" ? serenaOnly : !!agentChk[i.dataset.k];
+    i.addEventListener("change",()=>{
+      if(i.dataset.k==="serena") serenaOnly=i.checked; else agentChk[i.dataset.k]=i.checked;
+      store.set("ac-agents", JSON.stringify({...agentChk, serena:serenaOnly}));
+      renderAll();
+    });
+  });
   const bs=store.get("ac-basis"); if(bs){ planBasis=bs; $("#basis").value=bs; }
   $("#basis").addEventListener("change",e=>{ planBasis=e.target.value; store.set("ac-basis",planBasis); renderAll(); });
   const sp=store.get("ac-span");

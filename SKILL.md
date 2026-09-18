@@ -157,6 +157,9 @@ echo "{\"session_id\":\"test\",\"transcript_path\":\"$T\",\"cwd\":\"$PWD\"}" \
   hook ดู env `CLAUDE_CODE_SESSION_ID` ที่ Claude ส่งต่อให้ process ลูก → ถ้าไม่ใช่ session ตัวเอง ใส่ `via: "claude"`
   + `parent_session` · ตอน `--rebuild` ไม่มี env ให้ดู เลยหา prompt ของแถวนั้นในคำสั่ง Bash ของ transcript Claude แทน
 - **Claude Code ที่ชี้ไป model อื่น** (เช่น gateway qwen) → `agent: "claude-code:qwen"` ไม่ปนยอด `claude`
+- **serena (MCP)** — ตรวจ tool ที่ชื่อมี `serena` (เช่น `mcp__serena__*`) แล้วเก็บ `n_serena_calls` + `serena_tools`
+  ต่อรอบ · dashboard มี checkbox "เฉพาะรอบที่ใช้ serena" และ checkbox เลือกประเภท (CLI / IDE / Claude / Codex)
+  ตัวเลขเป็นการ tag รอบของ agent แม่เท่านั้น ไม่ได้แยกค่าใช้จ่ายออกมา เพราะ serena ไม่ได้จ่าย credit ของตัวเอง
 - **dedupe usage ตาม message id** — Claude เขียน assistant event ซ้ำ 3 รอบต่อ 1 ข้อความ
   (event ละ content block: thinking / text / tool_use) ถ้าบวกดื้อ ๆ token จะเกินจริง ~2-3 เท่า
   เคยเจอ 151 events → 67 ข้อความจริง
