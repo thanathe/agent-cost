@@ -238,6 +238,7 @@ Claude/Codex plan as you actually pay it.
 R=~/.claude/skills/agent-cost/scripts/report.py
 python3 $R --ledger 'team/ledger-*.jsonl' --month 2026-09        # totals plus a per-person table
 python3 $R --ledger 'team/ledger-*.jsonl' --owner somchai        # one person
+python3 $R --ledger 'team/ledger-*.jsonl' --team-claude 20         # plan for files that carry none
 ```
 
 With more than one person the report adds a **per-person table**: CodeBuddy credits (priced at the

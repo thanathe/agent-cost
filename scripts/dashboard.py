@@ -127,9 +127,15 @@ class Handler(BaseHTTPRequestHandler):
             # A download of numbers only (no prompts/paths) for the team roll-up — see export.py.
             q = parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
             try:
+                num = lambda k: (lambda v: float(v) if v not in (None, "") else None)((q.get(k) or [None])[0])
+                basis = (q.get("basis") or [""])[0]
+                days = int(basis) if basis.isdigit() else None
+                ui = {"claude": {"usd_per_month": num("claude"), "days_per_month": days},
+                      "codex": {"usd_per_month": num("codex"), "days_per_month": days},
+                      "codebuddy": {"usd_per_credit": num("credit")}}
                 fname, text, _ = export.build(name=(q.get("name") or [None])[0],
                                               hide_repos=(q.get("hide") or ["0"])[0] == "1",
-                                              auto_refresh=True)
+                                              auto_refresh=True, ui_plans=ui)
             except Exception as e:
                 return self._send(500, f"export failed: {e}".encode())
             return self._send(200, text.encode(), "application/x-ndjson; charset=utf-8",

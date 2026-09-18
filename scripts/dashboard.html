@@ -568,7 +568,9 @@ function applyPlanDefault(){
     const label = btn.textContent;
     btn.disabled = true; btn.textContent = "กำลังเตรียมไฟล์…";
     try {
-      const res = await fetch("/api/export?name=" + encodeURIComponent(name), {cache: "no-store"});
+      const val = id => (document.getElementById(id) || {}).value || "";
+      const qs = new URLSearchParams({name, claude: val("plan"), codex: val("plancx"), credit: val("cpx"), basis: val("basis")});
+      const res = await fetch("/api/export?" + qs.toString(), {cache: "no-store"});
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
       const a = document.createElement("a");

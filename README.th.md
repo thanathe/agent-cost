@@ -218,6 +218,7 @@ python3 scripts/export.py --refresh --name <ชื่อเรา>     # → ~/D
 R=~/.claude/skills/agent-cost/scripts/report.py
 python3 $R --ledger 'team/ledger-*.jsonl' --month 2026-09        # ยอดรวม + ตารางแยกคน
 python3 $R --ledger 'team/ledger-*.jsonl' --owner somchai        # เจาะคนเดียว
+python3 $R --ledger 'team/ledger-*.jsonl' --team-claude 20         # แพ็กของคนที่ไฟล์ไม่มีแพ็กติดมา
 ```
 
 มีมากกว่า 1 คน report จะมี **ตารางเทียบรายคน**: credit CodeBuddy (คิดราคา credit เดียวกันทุกคน = ของคนรวม),

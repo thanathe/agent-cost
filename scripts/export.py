@@ -72,11 +72,13 @@ def clean_name(name):
     return "".join(c for c in (name or default_name()).lower() if c.isalnum() or c in "._-") or "me"
 
 
-def build(name=None, since=None, until=None, hide_repos=False, auto_refresh=False):
+def build(name=None, since=None, until=None, hide_repos=False, auto_refresh=False, ui_plans=None):
     """(file name, jsonl text, summary dict) — used by the CLI and the dashboard's Export button.
 
     auto_refresh: re-derive the ledger first when most rows have no prompt (installed before
     prompts/categories existed), so the button works on an old install without a flag.
+    ui_plans: plan settings typed into the dashboard (kept in the browser, not pricing.json) —
+    they win over pricing.json, because that is what the person sees on their screen.
     """
     name = clean_name(name)
     d = ledger_dir()
@@ -101,10 +103,17 @@ def build(name=None, since=None, until=None, hide_repos=False, auto_refresh=Fals
     except Exception:
         rev = ""
 
+    plans = {k: dict(v) for k, v in (pricing.get("_plans") or {}).items() if isinstance(v, dict)}
+    for agent, vals in (ui_plans or {}).items():
+        given = {k: v for k, v in vals.items() if v is not None}
+        if given.get("usd_per_month") is not None and given["usd_per_month"] != plans.get(agent, {}).get("usd_per_month"):
+            plans.get(agent, {}).pop("name", None)   # "Max 5x" no longer describes the fee on screen
+        plans.setdefault(agent, {}).update(given)
+
     days = sorted({r["ts"][:10] for r in rows})
     meta = {"_meta": {"owner": name, "exported_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
                       "first_day": days[0], "last_day": days[-1], "rows": len(rows),
-                      "plans": pricing.get("_plans") or {}, "fx": pricing.get("_fx") or {},
+                      "plans": plans, "fx": pricing.get("_fx") or {},
                       "skill_rev": rev, "rows_without_prompt": no_prompt}}
     lines = [json.dumps(meta, ensure_ascii=False)]
     for r in sorted(rows, key=lambda r: r["ts"]):
