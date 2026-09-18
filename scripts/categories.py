@@ -51,7 +51,7 @@ def assign(rows):
     """{turn_key: category} — undecided turns inherit their session's last decided one."""
     out, last = {}, {}
     for r in sorted(rows, key=lambda r: r.get("ts") or ""):
-        own = own_category(r)
+        own = r.get("category") or own_category(r)   # exported rows carry it precomputed
         key = own or last.get(r.get("session_id")) or "other"
         if own:
             last[r.get("session_id")] = own

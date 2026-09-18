@@ -53,12 +53,17 @@ def usd(rec, pricing):
     )
 
 
-def plan_of(pricing, agent):
+OWNER_PLANS = {}   # owner → `_plans` from the `_meta` line of an exported ledger (export.py)
+
+
+def plan_of(pricing, agent, owner=None):
     """`_plans` in pricing.json: {"claude": {"name": "Max 5x", "usd_per_month": 100}}.
 
     A flat plan means per-token prices say nothing about what you actually paid.
     The honest number is the plan fee spread over the days the ledger covers.
     """
+    if owner in OWNER_PLANS:
+        return OWNER_PLANS[owner].get(agent) or {}
     return (pricing.get("_plans") or {}).get(agent) or {}
 
 
@@ -120,12 +125,16 @@ def real_cost_section(rows, pricing):
         grp, plan = by[ag], plan_of(pricing, base_agent(ag))
         a = agg(grp, pricing)
         mtok = (a["tok"] or 0) / 1e6
+        owners = defaultdict(list)
+        for r in grp:
+            owners[r.get("_owner") or "me"].append(r)
+        own_plans = {o: plan_of(pricing, base_agent(ag), o) for o in owners}
+        if not plan.get("usd_per_month"):
+            plan = next((p for p in own_plans.values() if p.get("usd_per_month")), plan)
         if plan.get("usd_per_month"):
             # Everyone pays their own plan — pro-rate per person, then add up.
-            owners = defaultdict(list)
-            for r in grp:
-                owners[r.get("_owner") or "me"].append(r)
-            parts = [plan_cost(rs, plan) for rs in owners.values()]
+            parts = [plan_cost(rs, own_plans[o] if own_plans[o].get("usd_per_month") else plan)
+                     for o, rs in owners.items()]
             parts = [p for p in parts if p]
             if not parts:
                 continue
@@ -257,6 +266,10 @@ def load_one(path, owner, args, seen):
                 r = json.loads(line)
             except Exception:
                 continue
+            if isinstance(r, dict) and "_meta" in r:
+                m = r["_meta"] or {}
+                OWNER_PLANS[m.get("owner") or owner] = m.get("plans") or {}
+                continue
             r["_owner"] = r.get("owner") or owner
             # turn_key = sha1(agent:session:turn) — a session id belongs to one
             # person, so a repeat means the same file arrived twice under two
@@ -283,6 +296,43 @@ def load_one(path, owner, args, seen):
                 continue
             rows.append(r)
     return rows
+
+
+def team_section(rows, pricing):
+    """One line per person: what CodeBuddy cost next to their own Claude/Codex plan.
+
+    Credits are priced at the compiler's rate for everyone, so a teammate who typed a different
+    credit price into their dashboard doesn't make CodeBuddy look cheaper or dearer.
+    """
+    ucr = plan_of(pricing, "codebuddy").get("usd_per_credit")
+    by = defaultdict(list)
+    for r in rows:
+        by[r["_owner"]].append(r)
+    out = ["## เทียบรายคน", "",
+           "| คน | ช่วง | CodeBuddy credit | ≈ USD | credit/วันที่ใช้ | IDE | Claude (แพ็กตัวเอง) | CB ÷ Claude | รอบ CB / Claude / Codex |",
+           "|---|---|--:|--:|--:|--:|--:|--:|---|"]
+    for who in sorted(by):
+        rs = by[who]
+        days = sorted({r["ts"][:10] for r in rs})
+        cb = [r for r in rs if (r.get("agent") or "").startswith("codebuddy")]
+        cr = sum(r.get("credit") or 0 for r in cb)
+        cr_ide = sum(r.get("credit") or 0 for r in cb if r.get("source") == "ide")
+        cb_days = len({r["ts"][:10] for r in cb if r.get("credit")})
+        cl = [r for r in rs if r.get("agent") == "claude"]
+        cplan = plan_of(pricing, "claude", who)
+        pc = plan_cost(cl, cplan) if cl else None
+        cb_usd = cr * ucr if ucr else None
+        ratio = f"{cb_usd/pc[0]:.1f}×" if cb_usd and pc and pc[0] else "—"
+        n = lambda a: sum(1 for r in rs if (r.get("agent") or "").startswith(a))
+        claude_cell = f"${pc[0]:.2f} (${cplan['usd_per_month']:g}/ด.)" if pc else "—"
+        cb_cell = f"${cb_usd:,.2f}" if cb_usd is not None else "—"
+        ide_cell = f"{cr_ide/cr*100:.0f}%" if cr else "—"
+        per_day = f"{cr/cb_days:,.0f}" if cb_days else "—"
+        out.append(f"| **{who}** | {days[0][5:]}→{days[-1][5:]} | {cr:,.0f} | {cb_cell} | {per_day} | {ide_cell} "
+                   f"| {claude_cell} | {ratio} | {n('codebuddy')} / {n('claude')} / {n('codex')} |")
+    rate = f"${ucr:g}/credit" if ucr else "ยังไม่ได้ตั้งราคา credit"
+    return out + ["", f"> credit ทุกคนคิดที่ {rate} (ของคนรวม) · Claude คิดจากแพ็กที่แต่ละคนตั้งไว้ในไฟล์ export "
+                  "· credit/วันที่ใช้ นับเฉพาะวันที่มี credit", ""]
 
 
 def fmt(n):
@@ -393,6 +443,8 @@ def main():
         md.append("")
 
     owners = {r["_owner"] for r in rows}
+    if len(owners) > 1:
+        md += team_section(rows, pricing)
     if args.by_owner or len(owners) > 1:
         by = defaultdict(lambda: defaultdict(list))
         for r in rows:

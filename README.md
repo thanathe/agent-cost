@@ -213,16 +213,21 @@ python3 $S/capture.py --rebuild                       # optional: tag which CLI 
 
 There is no server. Each person sends their ledger to whoever compiles the numbers.
 
-**Sending** — strip prompts and local paths first:
+**Sending** — one command, after `git pull`:
 
 ```bash
-L="$(python3 -c 'import sys,os;sys.path.insert(0,os.path.expanduser("~/.claude/skills/agent-cost/scripts"));import cost_paths;print(os.path.join(cost_paths.ledger_dir(),"ledger.jsonl"))')"
-jq -c '.prompt="" | .files_touched=[] | del(.cwd, .transcript, .ide_history)' "$L" > ~/Desktop/ledger-<yourname>.jsonl
-# using Codex too? append its ledger into the same file
-jq -c '.prompt="" | .files_touched=[] | del(.cwd, .transcript)' "$(dirname "$L")/codex-ledger.jsonl" >> ~/Desktop/ledger-<yourname>.jsonl 2>/dev/null
+cd ~/.claude/skills/agent-cost && git pull
+python3 scripts/export.py --refresh --name <yourname>     # → ~/Desktop/ledger-<yourname>.jsonl
 ```
 
-Name the file `ledger-<name>.jsonl` — that name becomes the person's name in the report.
+`--refresh` re-reads your transcripts and IDE history with the current rules first (needed once if
+you installed before work types and error tracking existed). Add `--since 2026-09-01` to limit the
+range, `--hide-repos` to replace repo names with hashes.
+
+The file holds per-turn numbers only — tokens, credits, time, tool-call and error counts, model, date,
+repo and a work category worked out on your machine. **No prompts, file paths, tool names or error
+text.** Its first line carries your plan settings from `pricing.json`, so the compiler prices your
+Claude/Codex plan as you actually pay it.
 
 **Compiling** — drop the files in one folder (outside any git repo):
 
@@ -232,9 +237,10 @@ python3 $R --ledger 'team/ledger-*.jsonl' --month 2026-09        # totals plus a
 python3 $R --ledger 'team/ledger-*.jsonl' --owner somchai        # one person
 ```
 
-Re-sending a whole file is fine — turns are de-duplicated by key. Subscription costs are pro-rated
-per person and then added up, using the compiler's `pricing.json`; if teammates are on different
-plans, treat the total as an estimate and read the per-person rows.
+With more than one person the report adds a **per-person table**: CodeBuddy credits (priced at the
+compiler's credit rate for everyone), credits per day used, IDE share, each person's own Claude plan,
+and the ratio between them. Re-sending a whole file is fine — turns are de-duplicated by key.
+Plain ledgers without a plan line fall back to the compiler's `pricing.json`.
 
 The dashboard only ever reads the ledger on your own machine.
 
