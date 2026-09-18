@@ -12,6 +12,7 @@ Local only on purpose: the ledger holds prompts and file paths. The server binds
 reach it through DNS rebinding.
 """
 import argparse, json, os, sys, threading, time, webbrowser
+from urllib.parse import parse_qs, quote
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +20,7 @@ from cost_paths import ledger_dir
 import ide_sync
 import categories
 from codex_capture import CodexCollector
+import export
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.join(HERE, "dashboard.html")
@@ -121,6 +123,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(304, headers={"ETag": tag})
             body = json.dumps(snapshot(), ensure_ascii=False).encode()
             return self._send(200, body, "application/json; charset=utf-8", {"ETag": tag})
+        if path == "/api/export":
+            # A download of numbers only (no prompts/paths) for the team roll-up — see export.py.
+            q = parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+            try:
+                fname, text, _ = export.build(name=(q.get("name") or [None])[0],
+                                              hide_repos=(q.get("hide") or ["0"])[0] == "1",
+                                              auto_refresh=True)
+            except Exception as e:
+                return self._send(500, f"export failed: {e}".encode())
+            return self._send(200, text.encode(), "application/x-ndjson; charset=utf-8",
+                              {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(fname)}"})
         return self._send(404, b"not found")
 
 

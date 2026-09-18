@@ -6,6 +6,8 @@
     export.py --refresh                # re-read transcripts + IDE history first (old installs)
     export.py --hide-repos             # repo names become short hashes
 
+The dashboard has the same thing as an "Export" button (it refreshes old installs by itself).
+
 What leaves your machine: per-turn numbers (tokens, credits, time, tool-call and error counts),
 model, agent, date, repo name and a work category worked out here from your prompt.
 What does not: prompts, file paths, tool names, error text, transcript locations.
@@ -66,29 +68,28 @@ def read_rows(d):
     return rows
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--name", help="your name in the team report (default: git email before @)")
-    ap.add_argument("--since", help="YYYY-MM-DD"); ap.add_argument("--until", help="YYYY-MM-DD")
-    ap.add_argument("--out", help="output file (default ~/Desktop/ledger-<name>.jsonl)")
-    ap.add_argument("--hide-repos", action="store_true", help="replace repo names with hashes")
-    ap.add_argument("--refresh", action="store_true",
-                    help="run capture.py --rebuild and ide_sync.py --resync first")
-    a = ap.parse_args()
+def clean_name(name):
+    return "".join(c for c in (name or default_name()).lower() if c.isalnum() or c in "._-") or "me"
 
-    name = "".join(c for c in (a.name or default_name()).lower() if c.isalnum() or c in "._") or "me"
+
+def build(name=None, since=None, until=None, hide_repos=False, auto_refresh=False):
+    """(file name, jsonl text, summary dict) — used by the CLI and the dashboard's Export button.
+
+    auto_refresh: re-derive the ledger first when most rows have no prompt (installed before
+    prompts/categories existed), so the button works on an old install without a flag.
+    """
+    name = clean_name(name)
     d = ledger_dir()
-    if a.refresh:
-        refresh()
-
     rows = read_rows(d)
-    rows = [r for r in rows if (not a.since or r["ts"][:10] >= a.since) and (not a.until or r["ts"][:10] <= a.until)]
+    if auto_refresh and rows and sum(1 for r in rows if not (r.get("prompt") or "").strip()) > len(rows) * 0.3:
+        refresh()
+        rows = read_rows(d)
+    rows = [r for r in rows if (not since or r["ts"][:10] >= since) and (not until or r["ts"][:10] <= until)]
     if not rows:
-        sys.exit(f"nothing to export in {d}")
+        raise ValueError(f"nothing to export in {d}")
 
     cats = categories.assign(rows)
     no_prompt = sum(1 for r in rows if not (r.get("prompt") or "").strip())
-
     try:
         with open(os.path.join(d, "pricing.json"), encoding="utf-8") as f:
             pricing = json.load(f)
@@ -105,30 +106,53 @@ def main():
                       "first_day": days[0], "last_day": days[-1], "rows": len(rows),
                       "plans": pricing.get("_plans") or {}, "fx": pricing.get("_fx") or {},
                       "skill_rev": rev, "rows_without_prompt": no_prompt}}
-
-    out_path = os.path.expanduser(a.out or (
-        f"~/Desktop/ledger-{name}.jsonl" if os.path.isdir(os.path.expanduser("~/Desktop")) else f"~/ledger-{name}.jsonl"))
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write(json.dumps(meta, ensure_ascii=False) + "\n")
-        for r in sorted(rows, key=lambda r: r["ts"]):
-            o = {k: r[k] for k in KEEP if k in r}
-            o["owner"] = name
-            o["session_id"] = short_hash(r.get("session_id"), 12)
-            repo = r.get("repo") or ""
-            o["repo"] = short_hash(repo, 8) if a.hide_repos and repo else repo
-            o["category"] = cats.get(r.get("turn_key") or id(r), "other")
-            o["has_error"] = bool(r.get("error"))
-            f.write(json.dumps(o, ensure_ascii=False) + "\n")
+    lines = [json.dumps(meta, ensure_ascii=False)]
+    for r in sorted(rows, key=lambda r: r["ts"]):
+        o = {k: r[k] for k in KEEP if k in r}
+        o["owner"] = name
+        o["session_id"] = short_hash(r.get("session_id"), 12)
+        repo = r.get("repo") or ""
+        o["repo"] = short_hash(repo, 8) if hide_repos and repo else repo
+        o["category"] = cats.get(r.get("turn_key") or id(r), "other")
+        o["has_error"] = bool(r.get("error"))
+        lines.append(json.dumps(o, ensure_ascii=False))
 
     by = {}
     for r in rows:
         k = r.get("agent", "?") + (" ide" if r.get("source") == "ide" else "")
         by[k] = by.get(k, 0) + 1
+    summary = {"turns": len(rows), "first_day": days[0], "last_day": days[-1], "by_agent": by,
+               "plans": meta["_meta"]["plans"], "rows_without_prompt": no_prompt}
+    return f"ledger-{name}.jsonl", "\n".join(lines) + "\n", summary
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--name", help="your name in the team report (default: git email before @)")
+    ap.add_argument("--since", help="YYYY-MM-DD"); ap.add_argument("--until", help="YYYY-MM-DD")
+    ap.add_argument("--out", help="output file (default ~/Desktop/ledger-<name>.jsonl)")
+    ap.add_argument("--hide-repos", action="store_true", help="replace repo names with hashes")
+    ap.add_argument("--refresh", action="store_true",
+                    help="run capture.py --rebuild and ide_sync.py --resync first")
+    a = ap.parse_args()
+
+    if a.refresh:
+        refresh()
+    try:
+        fname, text, s = build(a.name, a.since, a.until, a.hide_repos)
+    except ValueError as e:
+        sys.exit(str(e))
+    out_path = os.path.expanduser(a.out or (
+        f"~/Desktop/{fname}" if os.path.isdir(os.path.expanduser("~/Desktop")) else f"~/{fname}"))
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
     print(f"✓ {out_path}")
-    print(f"  {len(rows)} turns · {days[0]} → {days[-1]} · " + " · ".join(f"{k} {v}" for k, v in sorted(by.items())))
-    print(f"  plans: {json.dumps(meta['_meta']['plans'], ensure_ascii=False) or '{}'}")
-    if no_prompt > len(rows) * 0.3 and not a.refresh:
-        print(f"  ⚠ {no_prompt} turns have no prompt, so they can't be categorised — "
+    print(f"  {s['turns']} turns · {s['first_day']} → {s['last_day']} · "
+          + " · ".join(f"{k} {v}" for k, v in sorted(s["by_agent"].items())))
+    print(f"  plans: {json.dumps(s['plans'], ensure_ascii=False)}")
+    if s["rows_without_prompt"] > s["turns"] * 0.3 and not a.refresh:
+        print(f"  ⚠ {s['rows_without_prompt']} turns have no prompt, so they can't be categorised — "
               "run again with --refresh (after git pull)", file=sys.stderr)
     print("  No prompts, paths or tool names are in the file. Send it to whoever compiles the report.")
 

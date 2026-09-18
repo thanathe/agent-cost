@@ -195,7 +195,10 @@ python3 $S/capture.py --rebuild                       # ออปชัน: ต�
 
 ไม่มี server กลาง — แต่ละคนส่ง ledger ให้คนที่รวมยอด
 
-**ฝั่งคนส่ง** — คำสั่งเดียว หลัง `git pull`:
+**ฝั่งคนส่ง** — ง่ายสุด: `git pull` แล้วปิด-เปิด dashboard ใหม่ กดปุ่ม **⬇ Export ส่งทีม** มุมขวาบน ใส่ชื่อเล่น
+จะได้ไฟล์ `ledger-<ชื่อ>.jsonl` (ถ้าติดตั้งไว้นานแล้ว ปุ่มจะคำนวณ ledger ใหม่ให้เอง)
+
+หรือใช้ terminal:
 
 ```bash
 cd ~/.claude/skills/agent-cost && git pull

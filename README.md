@@ -213,7 +213,10 @@ python3 $S/capture.py --rebuild                       # optional: tag which CLI 
 
 There is no server. Each person sends their ledger to whoever compiles the numbers.
 
-**Sending** — one command, after `git pull`:
+**Sending** — easiest: `git pull`, restart the dashboard, click **⬇ Export ส่งทีม** (top right) and
+enter your nickname. It downloads `ledger-<name>.jsonl` and refreshes an old install by itself.
+
+Or from the terminal:
 
 ```bash
 cd ~/.claude/skills/agent-cost && git pull

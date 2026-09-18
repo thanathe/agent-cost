@@ -32,6 +32,10 @@ h1{font-size:26px;line-height:1.2;margin:0;font-weight:700;letter-spacing:-.01em
 h2{font-size:16px;margin:0;font-weight:600}
 .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
 .sub{color:var(--ink-2);margin:6px 0 0;max-width:72ch}
+header .head-actions{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.export-btn{font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.export-btn:hover{border-color:var(--ink-3)}
+.export-btn:disabled{opacity:.6;cursor:progress}
 header{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:20px}
 .legend{display:flex;gap:16px;font-size:13px;color:var(--ink-2)}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
@@ -120,7 +124,8 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
     <p class="sub">อ่านสดจาก <code id="lpath">ledger.jsonl</code> · CodeBuddy คิดตาม credit · Claude คิดจากแพ็กเหมาใน <code>pricing.json</code> (ถ้ามี) ส่วนราคา API ใช้ดูว่าคุ้มกว่ากี่เท่า</p>
   </div>
   <div class="head-r">
-    <div class="live" id="live" role="status"><i class="pulse"></i><span id="live-t">กำลังโหลด…</span></div>
+    <div class="head-actions"><button type="button" class="export-btn" id="export-btn" title="ดาวน์โหลดไฟล์ตัวเลขล้วน (ไม่มี prompt / path) ส่งให้คนรวมยอดทีม">⬇ Export ส่งทีม</button>
+    <div class="live" id="live" role="status"><i class="pulse"></i><span id="live-t">กำลังโหลด…</span></div></div>
     <div class="legend"><span><i class="sw" style="background:var(--cb)"></i>CodeBuddy CLI</span><span><i class="sw" style="background:var(--ide)"></i>CodeBuddy IDE</span><span><i class="sw" style="background:var(--claude)"></i>Claude</span></div>
   </div>
 </header>
@@ -549,5 +554,35 @@ function applyPlanDefault(){
   document.addEventListener("mousemove",e=>{ const t=e.target.closest&&e.target.closest("[data-tip]"); if(!t){tip.hidden=true;return;} tip.textContent=t.dataset.tip; tip.hidden=false; tip.style.left=(e.clientX+12)+"px"; tip.style.top=(e.clientY-30)+"px"; });
   poll(); setInterval(()=>{ if(!document.hidden) poll(); }, 4000); setInterval(setLive, 1000);
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden) poll(); });
+})();
+
+(function(){
+  const btn = document.getElementById("export-btn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    let saved = "";
+    try { saved = localStorage.getItem("agent-cost-export-name") || ""; } catch (e) {}
+    const name = (prompt("ชื่อเล่น (ภาษาอังกฤษ) ที่จะขึ้นในรายงานทีม", saved) || "").trim();
+    if (!name) return;
+    try { localStorage.setItem("agent-cost-export-name", name); } catch (e) {}
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = "กำลังเตรียมไฟล์…";
+    try {
+      const res = await fetch("/api/export?name=" + encodeURIComponent(name), {cache: "no-store"});
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      const m = (res.headers.get("Content-Disposition") || "").match(/filename\*=UTF-8''([^;]+)/);
+      a.download = m ? decodeURIComponent(m[1]) : "ledger.jsonl";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      btn.textContent = "✓ ดาวน์โหลดแล้ว — ส่งไฟล์ให้คนรวมยอดได้เลย";
+      setTimeout(() => { btn.textContent = label; }, 6000);
+    } catch (e) {
+      alert("Export ไม่สำเร็จ: " + e.message + "\n(ถ้าเพิ่ง git pull ให้ปิดแล้วเปิด dashboard ใหม่)");
+      btn.textContent = label;
+    } finally { btn.disabled = false; }
+  });
 })();
 </script>
