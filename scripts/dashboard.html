@@ -387,6 +387,7 @@ function categories(rows){
   // Walk each session in order so undecided turns inherit what that conversation was doing.
   const out=new Map(), last=new Map();
   [...rows].sort((a,b)=>a.ts<b.ts?-1:1).forEach(r=>{
+    if(r.category){ out.set(r.turn_key, r.category); return; }   // server already classified the full row
     const own=category(r), k=own || last.get(r.session_id) || "other";
     if(own) last.set(r.session_id, own);
     out.set(r.turn_key, k);

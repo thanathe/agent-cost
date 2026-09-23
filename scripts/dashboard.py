@@ -65,7 +65,7 @@ def etag():
 
 def snapshot():
     ledger, pricing_path, codex_ledger = paths()
-    rows = []
+    full = []
     for source in (ledger, codex_ledger):
         try:
             with open(source, encoding="utf-8") as f:
@@ -74,11 +74,19 @@ def snapshot():
                         r = json.loads(line)
                     except Exception:
                         continue
-                    slim = {k: r.get(k) for k in KEEP}
-                    slim["prompt"] = (r.get("prompt") or "")[:160]
-                    rows.append(slim)
+                    if isinstance(r, dict):
+                        full.append(r)
         except OSError:
             pass
+    # Classify here, on the whole row: the page only gets a slim copy (no tool names, no file
+    # paths, a clipped prompt), so it can't tell a coding turn from "other" by itself.
+    cats = categories.assign(full)
+    rows = []
+    for r in full:
+        slim = {k: r.get(k) for k in KEEP}
+        slim["prompt"] = (r.get("prompt") or "")[:160]
+        slim["category"] = cats.get(r.get("turn_key") or id(r), "other")
+        rows.append(slim)
     try:
         with open(pricing_path, encoding="utf-8") as f:
             pricing = json.load(f)
