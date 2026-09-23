@@ -53,12 +53,21 @@ def usd(rec, pricing):
     )
 
 
-def plan_of(pricing, agent):
+OWNER_PLANS = {}   # owner → `_plans` from the `_meta` line of an exported ledger (export.py)
+TEAM_DEFAULT = {}  # --team-claude / --team-codex: plan for teammates whose file carries none
+
+
+def plan_of(pricing, agent, owner=None):
     """`_plans` in pricing.json: {"claude": {"name": "Max 5x", "usd_per_month": 100}}.
 
     A flat plan means per-token prices say nothing about what you actually paid.
     The honest number is the plan fee spread over the days the ledger covers.
     """
+    own = (OWNER_PLANS.get(owner) or {}).get(agent)
+    if own and (own.get("usd_per_month") or own.get("usd_per_credit")):
+        return own
+    if owner is not None and agent in TEAM_DEFAULT:
+        return TEAM_DEFAULT[agent]
     return (pricing.get("_plans") or {}).get(agent) or {}
 
 
@@ -120,12 +129,16 @@ def real_cost_section(rows, pricing):
         grp, plan = by[ag], plan_of(pricing, base_agent(ag))
         a = agg(grp, pricing)
         mtok = (a["tok"] or 0) / 1e6
+        owners = defaultdict(list)
+        for r in grp:
+            owners[r.get("_owner") or "me"].append(r)
+        own_plans = {o: plan_of(pricing, base_agent(ag), o) for o in owners}
+        if not plan.get("usd_per_month"):
+            plan = next((p for p in own_plans.values() if p.get("usd_per_month")), plan)
         if plan.get("usd_per_month"):
             # Everyone pays their own plan — pro-rate per person, then add up.
-            owners = defaultdict(list)
-            for r in grp:
-                owners[r.get("_owner") or "me"].append(r)
-            parts = [plan_cost(rs, plan) for rs in owners.values()]
+            parts = [plan_cost(rs, own_plans[o] if own_plans[o].get("usd_per_month") else plan)
+                     for o, rs in owners.items()]
             parts = [p for p in parts if p]
             if not parts:
                 continue
@@ -257,6 +270,10 @@ def load_one(path, owner, args, seen):
                 r = json.loads(line)
             except Exception:
                 continue
+            if isinstance(r, dict) and "_meta" in r:
+                m = r["_meta"] or {}
+                OWNER_PLANS[m.get("owner") or owner] = m.get("plans") or {}
+                continue
             r["_owner"] = r.get("owner") or owner
             # turn_key = sha1(agent:session:turn) — a session id belongs to one
             # person, so a repeat means the same file arrived twice under two
@@ -283,6 +300,44 @@ def load_one(path, owner, args, seen):
                 continue
             rows.append(r)
     return rows
+
+
+def team_section(rows, pricing):
+    """One line per person: CodeBuddy money next to their own Claude plan, on the same days.
+
+    The team method: credits × the compiler's credit price (one rate for everyone), against the
+    Claude plan counted only on days that person spent CodeBuddy credits — plan ÷ working days
+    per month (their `days_per_month`, else 22) × those days. Spreading the plan over days they
+    never opened CodeBuddy would make CodeBuddy look cheaper than it is.
+    """
+    ucr = plan_of(pricing, "codebuddy").get("usd_per_credit")
+    by = defaultdict(list)
+    for r in rows:
+        by[r["_owner"]].append(r)
+    out = ["## เทียบรายคน (เฉพาะวันที่ใช้ CodeBuddy)", "",
+           "| คน | ช่วงข้อมูล | CodeBuddy credit | ≈ USD | วันที่ใช้ CB | credit/วัน | CLI | Claude วันเดียวกัน | CB ÷ Claude | รอบ CB / Claude / Codex |",
+           "|---|---|--:|--:|--:|--:|--:|--:|--:|---|"]
+    for who in sorted(by):
+        rs = by[who]
+        days = sorted({r["ts"][:10] for r in rs})
+        cb = [r for r in rs if (r.get("agent") or "").startswith("codebuddy")]
+        cr = sum(r.get("credit") or 0 for r in cb)
+        cr_cli = sum(r.get("credit") or 0 for r in cb if r.get("source") != "ide")
+        cb_days = len({r["ts"][:10] for r in cb if r.get("credit")})
+        cplan = plan_of(pricing, "claude", who)
+        per_day = cplan["usd_per_month"] / (cplan.get("days_per_month") or 22) if cplan.get("usd_per_month") else None
+        claude_usd = per_day * cb_days if per_day and cb_days else None
+        cb_usd = cr * ucr if ucr else None
+        ratio = f"**{cb_usd/claude_usd:.1f}×**" if cb_usd and claude_usd else "—"
+        n = lambda a: sum(1 for r in rs if (r.get("agent") or "").startswith(a))
+        claude_cell = f"${claude_usd:.2f} (${cplan['usd_per_month']:g}/ด.)" if claude_usd else "— (ไม่มีแพ็ก)"
+        out.append(f"| **{who}** | {days[0][5:]}→{days[-1][5:]} | {cr:,.0f} | {f'${cb_usd:,.2f}' if cb_usd is not None else '—'} "
+                   f"| {cb_days} | {f'{cr/cb_days:,.0f}' if cb_days else '—'} | {f'{cr_cli/cr*100:.0f}%' if cr else '—'} "
+                   f"| {claude_cell} "
+                   f"| {ratio} | {n('codebuddy')} / {n('claude')} / {n('codex')} |")
+    rate = f"${ucr:g}/credit" if ucr else "ยังไม่ได้ตั้งราคา credit"
+    return out + ["", f"> credit ทุกคนคิดที่ {rate} · Claude = แพ็ก ÷ วันทำงานต่อเดือน (ค่าเริ่ม 22) × วันที่ใช้ CodeBuddy "
+                  "· แพ็กมาจากไฟล์ export ของแต่ละคน ถ้าไม่มีใช้ของคนรวม", ""]
 
 
 def fmt(n):
@@ -351,6 +406,9 @@ def main():
     ap.add_argument("--by-owner", action="store_true",
                     help="แยกตามคน (อัตโนมัติอยู่แล้วถ้ามีมากกว่า 1 คน)")
     ap.add_argument("--owner", help="เอาเฉพาะคนนี้")
+    ap.add_argument("--team-claude", type=float, metavar="USD",
+                    help="แพ็ก Claude/เดือน ของคนที่ไฟล์ export ไม่มีแพ็กติดมา (เช่น 20)")
+    ap.add_argument("--team-codex", type=float, metavar="USD", help="เหมือนกันสำหรับ Codex")
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--limit", type=int, default=200)
     args = ap.parse_args()
@@ -359,6 +417,10 @@ def main():
         args.month = datetime.date.today().strftime("%Y-%m")
 
     pricing = load_pricing()
+    if args.team_claude:
+        TEAM_DEFAULT["claude"] = {"usd_per_month": args.team_claude, "days_per_month": 22}
+    if args.team_codex:
+        TEAM_DEFAULT["codex"] = {"usd_per_month": args.team_codex, "days_per_month": 22}
     rows = load(args)
     if not rows:
         print(f"ไม่มีข้อมูลใน ledger ({LEDGER})")
@@ -393,6 +455,8 @@ def main():
         md.append("")
 
     owners = {r["_owner"] for r in rows}
+    if len(owners) > 1:
+        md += team_section(rows, pricing)
     if args.by_owner or len(owners) > 1:
         by = defaultdict(lambda: defaultdict(list))
         for r in rows:

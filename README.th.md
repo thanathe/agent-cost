@@ -195,16 +195,22 @@ python3 $S/capture.py --rebuild                       # ออปชัน: ต�
 
 ไม่มี server กลาง — แต่ละคนส่ง ledger ให้คนที่รวมยอด
 
-**ฝั่งคนส่ง** ตัด prompt กับ path ออกก่อน:
+**ฝั่งคนส่ง** — ง่ายสุด: `git pull` แล้วปิด-เปิด dashboard ใหม่ กดปุ่ม **⬇ Export ส่งทีม** มุมขวาบน ใส่ชื่อเล่น
+จะได้ไฟล์ `ledger-<ชื่อ>.jsonl` (ถ้าติดตั้งไว้นานแล้ว ปุ่มจะคำนวณ ledger ใหม่ให้เอง)
+
+หรือใช้ terminal:
 
 ```bash
-L="$(python3 -c 'import sys,os;sys.path.insert(0,os.path.expanduser("~/.claude/skills/agent-cost/scripts"));import cost_paths;print(os.path.join(cost_paths.ledger_dir(),"ledger.jsonl"))')"
-jq -c '.prompt="" | .files_touched=[] | del(.cwd, .transcript, .ide_history)' "$L" > ~/Desktop/ledger-<ชื่อเรา>.jsonl
-# ใช้ Codex ด้วย: ต่อท้ายไฟล์เดียวกัน
-jq -c '.prompt="" | .files_touched=[] | del(.cwd, .transcript)' "$(dirname "$L")/codex-ledger.jsonl" >> ~/Desktop/ledger-<ชื่อเรา>.jsonl 2>/dev/null
+cd ~/.claude/skills/agent-cost && git pull
+python3 scripts/export.py --refresh --name <ชื่อเรา>     # → ~/Desktop/ledger-<ชื่อเรา>.jsonl
 ```
 
-ตั้งชื่อไฟล์ `ledger-<ชื่อ>.jsonl` — ชื่อตรงนั้นคือชื่อที่ขึ้นใน report
+`--refresh` อ่าน transcript กับประวัติ IDE ใหม่ด้วยกติกาล่าสุดก่อน (ต้องทำครั้งหนึ่งถ้าติดตั้งก่อนมีหมวดงาน/การนับ error)
+เพิ่ม `--since 2026-09-01` เพื่อจำกัดช่วง หรือ `--hide-repos` ให้ชื่อ repo เป็น hash
+
+ในไฟล์มีแค่ตัวเลขรายรอบ — token, credit, เวลา, จำนวน tool call/error, model, วันที่, repo และหมวดงานที่คำนวณในเครื่องเรา
+**ไม่มี prompt, path ไฟล์, ชื่อ tool หรือข้อความ error** บรรทัดแรกเก็บแพ็กที่เราตั้งใน `pricing.json`
+คนรวมจะคิดค่า Claude/Codex ตามแพ็กที่เราจ่ายจริง
 
 **ฝั่งคนรวม** เอาไฟล์มากองโฟลเดอร์เดียว (นอก git repo):
 
@@ -212,10 +218,12 @@ jq -c '.prompt="" | .files_touched=[] | del(.cwd, .transcript)' "$(dirname "$L")
 R=~/.claude/skills/agent-cost/scripts/report.py
 python3 $R --ledger 'team/ledger-*.jsonl' --month 2026-09        # ยอดรวม + ตารางแยกคน
 python3 $R --ledger 'team/ledger-*.jsonl' --owner somchai        # เจาะคนเดียว
+python3 $R --ledger 'team/ledger-*.jsonl' --team-claude 20         # แพ็กของคนที่ไฟล์ไม่มีแพ็กติดมา
 ```
 
-ส่งไฟล์เดิมซ้ำได้ ไม่นับซ้ำ (dedupe ด้วย turn key) · ค่าแพ็กคิดแยกรายคนแล้วค่อยรวม โดยใช้ `pricing.json`
-ของคนรวม ถ้าในทีมใช้แพ็กคนละแบบ ให้ถือว่ายอดรวมเป็นค่าประมาณ แล้วดูตารางรายคนประกอบ
+มีมากกว่า 1 คน report จะมี **ตารางเทียบรายคน**: credit CodeBuddy (คิดราคา credit เดียวกันทุกคน = ของคนรวม),
+credit ต่อวันที่ใช้, สัดส่วน IDE, ค่าแพ็ก Claude ของแต่ละคน และอัตราส่วนระหว่างสองอย่าง · ส่งไฟล์เดิมซ้ำได้ ไม่นับซ้ำ
+(dedupe ด้วย turn key) · ledger แบบเก่าที่ไม่มีบรรทัดแพ็กจะใช้ `pricing.json` ของคนรวมแทน
 
 dashboard อ่านได้แค่ ledger ของเครื่องตัวเอง
 
