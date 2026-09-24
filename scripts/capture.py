@@ -25,7 +25,7 @@ we subtract on the CodeBuddy side so the two columns mean the same thing.
 Never fails loudly in hook mode: a hook that errors would interrupt the agent,
 so every failure path exits 0. Set AGENT_COST_DEBUG=1 to see why nothing was written.
 """
-import json, os, re, sys, time, datetime, hashlib
+import collections, json, os, re, sys, time, datetime, hashlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cost_paths import load_config, ledger_dir, record_prompts, ledger_lock
@@ -47,6 +47,12 @@ WORK_EVENTS = {"user", "assistant", "message", "reasoning", "function_call", "fu
 # serena" is a question of its own. Any tool name containing "serena" counts
 # (Claude writes mcp__serena__<tool>; custom server names keep the word "serena").
 SERENA_TOOL_RE = re.compile(r"serena", re.I)
+SERENA_FILES_MAX = 40
+
+
+def serena_short_name(name):
+    """mcp__serena__find_symbol / serena__find_symbol → find_symbol, so both agents share one key."""
+    return name.rsplit("__", 1)[-1]
 
 
 def log(*a):
@@ -214,6 +220,9 @@ def collect(turn):
     model = None
     tools, files = [], []
     serena_calls = 0
+    serena_counts = collections.Counter()
+    serena_ids, serena_files = set(), set()
+    serena_errors = 0
     stamps = []
     # Claude Code writes ONE event per content block (thinking / text / tool_use)
     # and repeats the same `message.usage` on each — summing blindly overcounts
@@ -249,12 +258,19 @@ def collect(turn):
             if isinstance(blk, dict):
                 if blk.get("type") == "tool_result" and blk.get("is_error"):
                     tool_errors += 1
+                    if blk.get("tool_use_id") in serena_ids:
+                        serena_errors += 1
                 elif blk.get("type") == "text" and API_ERROR_RE.match(blk.get("text") or ""):
                     api_errors.append(" ".join(blk["text"].split())[:160])
         if ev.get("type") == "function_call_result":
             res = ev.get("result")
-            if isinstance(res, dict) and (res.get("isError") or res.get("status") == "error"):
+            # CodeBuddy writes the outcome on the event itself (status); older rows nest it in result.
+            failed = ev.get("status") in ("error", "failed") or (
+                isinstance(res, dict) and (res.get("isError") or res.get("status") == "error"))
+            if failed:
                 tool_errors += 1
+                if ev.get("callId") in serena_ids or SERENA_TOOL_RE.search(ev.get("name") or ""):
+                    serena_errors += 1
         u = msg.get("usage") or {}
         msg_key = msg.get("id") or ev.get("id")
         if u and msg_key not in seen_msgs:
@@ -278,16 +294,21 @@ def collect(turn):
         # tool calls: CodeBuddy = function_call events; Claude = tool_use content blocks
         if ev.get("type") == "function_call":
             name = ev.get("name")
-            if name:
-                tools.append(name)
-                if SERENA_TOOL_RE.search(name):
-                    serena_calls += 1
             args = ev.get("arguments")
             if isinstance(args, str):
                 try:
                     args = json.loads(args)
                 except Exception:
                     args = {}
+            if name:
+                tools.append(name)
+                if SERENA_TOOL_RE.search(name):
+                    serena_calls += 1
+                    serena_counts[serena_short_name(name)] += 1
+                    if ev.get("callId"):
+                        serena_ids.add(ev["callId"])
+                    if isinstance(args, dict) and args.get("relative_path"):
+                        serena_files.add(args["relative_path"])
             if isinstance(args, dict):
                 p = args.get("file_path") or args.get("path")
                 if p:
@@ -301,11 +322,16 @@ def collect(turn):
                         continue
                     if tkey:
                         seen_tools.add(tkey)
+                    inp = blk.get("input") or {}
                     if blk.get("name"):
                         tools.append(blk["name"])
                         if SERENA_TOOL_RE.search(blk["name"]):
                             serena_calls += 1
-                    inp = blk.get("input") or {}
+                            serena_counts[serena_short_name(blk["name"])] += 1
+                            if tkey:
+                                serena_ids.add(tkey)
+                            if isinstance(inp, dict) and inp.get("relative_path"):
+                                serena_files.add(inp["relative_path"])
                     p = inp.get("file_path") or inp.get("path")
                     if p:
                         files.append(p)
@@ -325,6 +351,9 @@ def collect(turn):
         "api_errors": api_errors,
         "elapsed_sec": elapsed,
         "serena_calls": serena_calls,
+        "serena_counts": dict(serena_counts.most_common()),
+        "serena_errors": serena_errors,
+        "serena_files": sorted(serena_files)[:SERENA_FILES_MAX],
     }
 
 
@@ -450,6 +479,9 @@ def build_record(events, prompts, start, tpath, session_id, cwd, ts):
         "tools": sorted(set(facts["tools"])),
         "n_serena_calls": facts["serena_calls"],
         "serena_tools": sorted({t for t in facts["tools"] if SERENA_TOOL_RE.search(t)}),
+        "serena_tool_counts": facts["serena_counts"],
+        "n_serena_errors": facts["serena_errors"],
+        "serena_files": facts["serena_files"],
         "files_touched": facts["files"][:40],
         "transcript": tpath,
     }

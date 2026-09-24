@@ -48,7 +48,7 @@ def build(events, tpath):
                                 '2026-09-18T10:00:20+07:00')
 
 
-class SerenaDetectionTests(unittest.TestCase):
+class TranscriptCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -60,6 +60,8 @@ class SerenaDetectionTests(unittest.TestCase):
         p.write_text('\n'.join(json.dumps(e) for e in [{}]) + '\n')
         return str(p)
 
+
+class SerenaDetectionTests(TranscriptCase):
     def test_claude_serena_tool_use_counted(self):
         rec = build(claude_turn('mcp__serena__find_file'), self.tpath('claude'))
         self.assertEqual(rec['n_serena_calls'], 1)
@@ -94,6 +96,87 @@ class SerenaDetectionTests(unittest.TestCase):
         events.insert(2, dup)
         rec = build(events, self.tpath('claude'))
         self.assertEqual(rec['n_serena_calls'], 1)
+        self.assertEqual(rec['serena_tool_counts'], {'find_file': 1})
+
+
+class SerenaDetailTests(TranscriptCase):
+    def test_claude_per_tool_counts_use_short_name(self):
+        events = claude_turn('mcp__serena__find_symbol')
+        events[1]['message']['content'].append(
+            {'type': 'tool_use', 'id': 't2', 'name': 'mcp__serena__find_symbol', 'input': {}})
+        events[1]['message']['content'].append(
+            {'type': 'tool_use', 'id': 't3', 'name': 'mcp__serena__replace_symbol_body', 'input': {}})
+        rec = build(events, self.tpath('claude'))
+        self.assertEqual(rec['serena_tool_counts'], {'find_symbol': 2, 'replace_symbol_body': 1})
+        self.assertEqual(rec['n_serena_calls'], 3)
+
+    def test_claude_serena_error_matched_by_tool_use_id(self):
+        events = claude_turn('mcp__serena__find_symbol')
+        events[2]['message']['content'][0]['is_error'] = True
+        rec = build(events, self.tpath('claude'))
+        self.assertEqual(rec['n_serena_errors'], 1)
+        self.assertEqual(rec['n_tool_errors'], 1)
+
+    def test_claude_non_serena_error_not_counted_as_serena(self):
+        events = claude_turn('Read')
+        events[2]['message']['content'][0]['is_error'] = True
+        rec = build(events, self.tpath('claude'))
+        self.assertEqual(rec['n_serena_errors'], 0)
+
+    def test_claude_serena_relative_path_recorded(self):
+        events = claude_turn('mcp__serena__get_symbols_overview')
+        events[1]['message']['content'][0]['input'] = {'relative_path': 'src/app.js'}
+        rec = build(events, self.tpath('claude'))
+        self.assertEqual(rec['serena_files'], ['src/app.js'])
+
+    def test_codebuddy_serena_error_by_status_and_call_id(self):
+        events = codebuddy_turn('serena__find_symbol')
+        events[1]['callId'] = 'c1'
+        events[1]['arguments'] = json.dumps({'relative_path': 'lib/x.py'})
+        events[2].update({'callId': 'c1', 'name': 'serena__find_symbol', 'status': 'error'})
+        rec = build(events, self.tpath('codebuddy'))
+        self.assertEqual(rec['serena_tool_counts'], {'find_symbol': 1})
+        self.assertEqual(rec['n_serena_errors'], 1)
+        self.assertEqual(rec['serena_files'], ['lib/x.py'])
+
+    def test_codebuddy_serena_error_matched_by_call_id_only(self):
+        events = codebuddy_turn('serena__find_symbol')
+        events[1]['callId'] = 'c1'
+        events[2].update({'callId': 'c1', 'status': 'failed'})
+        rec = build(events, self.tpath('codebuddy'))
+        self.assertEqual(rec['n_serena_errors'], 1)
+
+    def test_codebuddy_serena_error_matched_by_name_only(self):
+        events = codebuddy_turn('serena__find_symbol')
+        events[2].update({'name': 'serena__find_symbol', 'status': 'error'})
+        rec = build(events, self.tpath('codebuddy'))
+        self.assertEqual(rec['n_serena_errors'], 1)
+
+    def test_codebuddy_non_serena_failure_not_counted_as_serena(self):
+        events = codebuddy_turn('Bash')
+        events[1]['callId'] = 'c9'
+        events[2].update({'callId': 'c9', 'name': 'Bash', 'status': 'error'})
+        rec = build(events, self.tpath('codebuddy'))
+        self.assertEqual(rec['n_serena_errors'], 0)
+        self.assertEqual(rec['n_tool_errors'], 1)
+
+    def test_serena_errors_never_exceed_tool_errors(self):
+        events = codebuddy_turn('serena__find_symbol')
+        events[2].update({'name': 'serena__find_symbol', 'status': 'error'})
+        rec = build(events, self.tpath('codebuddy'))
+        self.assertLessEqual(rec['n_serena_errors'], rec['n_tool_errors'])
+
+    def test_codebuddy_completed_status_is_not_error(self):
+        events = codebuddy_turn('serena__find_symbol')
+        events[2].update({'name': 'serena__find_symbol', 'status': 'completed'})
+        rec = build(events, self.tpath('codebuddy'))
+        self.assertEqual(rec['n_serena_errors'], 0)
+
+    def test_no_serena_gives_empty_detail(self):
+        rec = build(claude_turn('Bash'), self.tpath('claude'))
+        self.assertEqual(rec['serena_tool_counts'], {})
+        self.assertEqual(rec['n_serena_errors'], 0)
+        self.assertEqual(rec['serena_files'], [])
 
 
 if __name__ == '__main__':

@@ -27,7 +27,8 @@ PAGE = os.path.join(HERE, "dashboard.html")
 KEEP = ("turn_key", "agent", "session_id", "ts", "repo", "credit", "input_tokens", "output_tokens",
         "cache_read_tokens", "cache_write_tokens", "elapsed_sec", "model", "n_tool_calls",
         "via", "n_subagents", "subagent_tokens", "source",
-        "n_tool_errors", "n_api_errors", "error", "resumed")
+        "n_tool_errors", "n_api_errors", "error", "resumed",
+        "n_serena_calls", "serena_tools", "serena_tool_counts", "n_serena_errors", "serena_files")
 
 
 _ide = {"at": 0.0, "lock": threading.Lock()}

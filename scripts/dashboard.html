@@ -5,7 +5,7 @@
 :root{
   --bg:#f5f6f8; --surface:#ffffff; --sunk:#eceef2; --line:#dde1e7;
   --ink:#12151b; --ink-2:#4b5361; --ink-3:#7a8392;
-  --codex:#4a3aa7; --claude:#eb6834; --cb:#2a78d6; --ide:#1baf7a;
+  --codex:#4a3aa7; --claude:#eb6834; --cb:#2a78d6; --ide:#1baf7a; --serena:#c2367d;
   --warn:#b26a00; --warn-bg:#fff4df; --crit:#c23b3b; --crit-bg:#fdecec; --ok:#1f7a4d; --ok-bg:#e6f4ec;
   --sans:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -14,14 +14,14 @@
   :root:not([data-theme="light"]){
     --bg:#101318; --surface:#181c23; --sunk:#12161c; --line:#2a303a;
     --ink:#eef1f5; --ink-2:#b3bac6; --ink-3:#848d9b;
-    --codex:#9085e9; --claude:#d95926; --cb:#3987e5; --ide:#199e70;
+    --codex:#9085e9; --claude:#d95926; --cb:#3987e5; --ide:#199e70; --serena:#e070a8;
     --warn:#f0b249; --warn-bg:#2d2310; --crit:#f07c7c; --crit-bg:#2e1616; --ok:#5cc792; --ok-bg:#12281d;
   }
 }
 :root[data-theme="dark"]{
   --bg:#101318; --surface:#181c23; --sunk:#12161c; --line:#2a303a;
   --ink:#eef1f5; --ink-2:#b3bac6; --ink-3:#848d9b;
-  --codex:#9085e9; --claude:#d95926; --cb:#3987e5; --ide:#199e70;
+  --codex:#9085e9; --claude:#d95926; --cb:#3987e5; --ide:#199e70; --serena:#e070a8;
   --warn:#f0b249; --warn-bg:#2d2310; --crit:#f07c7c; --crit-bg:#2e1616; --ok:#5cc792; --ok-bg:#12281d;
 }
 *{box-sizing:border-box}
@@ -43,6 +43,7 @@ section{display:flex;flex-direction:column;gap:12px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px}
 .duel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .duel.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.duel.four{grid-template-columns:repeat(4,minmax(0,1fr))}
 .side{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
 .side+.side{border-left:1px solid var(--line)}
 .side-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
@@ -97,7 +98,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--sunk);padding:1px 5
 .row-h{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:12px;padding:6px 9px;border-radius:5px;white-space:nowrap;z-index:9}
 .foot{color:var(--ink-3);font-size:12px}
-@media (max-width:820px){.duel,.charts,.verdict{grid-template-columns:1fr}.side+.side{border-left:0;border-top:1px solid var(--line)}.kv{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:1100px){.duel.four{grid-template-columns:repeat(2,minmax(0,1fr))}.duel.four .side:nth-child(3){border-left:0}.duel.four .side:nth-child(n+3){border-top:1px solid var(--line)}}
+@media (max-width:820px){.duel,.duel.three,.duel.four,.charts,.verdict{grid-template-columns:1fr}.side+.side{border-left:0;border-top:1px solid var(--line)}.kv{grid-template-columns:repeat(2,1fr)}}
 .head-r{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
 .live{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--ok);background:var(--ok-bg);padding:4px 10px;border-radius:99px}
 .live.down{color:var(--crit);background:var(--crit-bg)}
@@ -202,7 +204,7 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
   <div class="row-h">
     <h2>รอบที่แพงที่สุด</h2>
     <div class="seg" role="group" aria-label="เลือก agent">
-      <button data-a="codebuddy" aria-pressed="true">CodeBuddy</button><button data-a="codex" aria-pressed="false">Codex</button><button data-a="claude" aria-pressed="false">Claude</button>
+      <button data-a="codebuddy" aria-pressed="true">CodeBuddy</button><button data-a="codex" aria-pressed="false">Codex</button><button data-a="claude" aria-pressed="false">Claude</button><button data-a="serena" aria-pressed="false">Serena</button>
     </div>
   </div>
   <div class="panel scroll"><table id="top"></table></div>
@@ -224,7 +226,8 @@ let catFilter = "all", catSort = "turns", CATMAP = new Map(), planCxUsd = null, 
 // Which agent types are shown (checkboxes). "serena" is an overlay, not an agent:
 // it narrows every bucket to turns that called serena tools via MCP.
 let agentChk = {cli:true, ide:true, claude:true, codex:true}, serenaOnly = false;
-let ROWS = [], CB = [], CL = [], CX = [];
+let ROWS = [], CB = [], CL = [], CX = [], SE = [];
+const SERENA_TOP_TOOLS = 5;
 
 const ctx = r => (r.input_tokens||0)+(r.cache_read_tokens||0)+(r.cache_write_tokens||0);
 const tokAll = r => ctx(r)+(r.output_tokens||0);
@@ -286,8 +289,21 @@ function renderDuel(){
   const cxTag = (planCxUsd ? `แพ็ก $${fmt(planCxUsd,0)}/เดือน` : models(CX)) + (planCxUsd&&cx.hasApi ? ` · มูลค่า API $${fmt(cx.api,0)}` : "");
   const codexSide = CX.length ? side("Codex","var(--codex)",cx,cxBig,cxTag,
     `<p class="split">รอบที่ทำเสร็จในเครื่อง · ไม่มี credit${planCxUsd?"":cx.hasApi?" · ตัวเลขนี้คือราคา API":" · ใส่แพ็ก Codex หรือราคา API ใน pricing.json"}</p>`) : "";
-  $("#duel").classList.toggle("three", CX.length>0);
-  $("#duel").innerHTML = side(cbName,"var(--cb)",a,cbBig,models(CB),cbExtra) + side("Claude Code","var(--claude)",b,clBig,clTag,clExtra) + codexSide;
+  // serena is an overlay on the other agents (driven over MCP), so its card re-counts their turns.
+  const se=agg(SE), seCalls=SE.reduce((t,r)=>t+r.n_serena_calls,0);
+  const seBy=n=>SE.filter(r=>r.agent===n).length;
+  const seTools=new Map(); SE.forEach(r=>Object.entries(r.serena_tool_counts||{}).forEach(([k,v])=>seTools.set(k,(seTools.get(k)||0)+v)));
+  const seTop=[...seTools].sort((x,y)=>y[1]-x[1]).slice(0,SERENA_TOP_TOOLS);
+  const seErr=SE.reduce((t,r)=>t+(r.n_serena_errors||0),0), seFiles=new Set(SE.flatMap(r=>r.serena_files||[])).size;
+  const seToolLine = seTop.length ? `<p class="split">${seTop.map(([k,v])=>`${esc(k)} <b>×${fmt(v)}</b>`).join(" · ")}</p>` : "";
+  const serenaSide = SE.length ? side("Serena","var(--serena)",se,`${fmt(seCalls)}<small>tool calls</small>`,"MCP · นับซ้อนอยู่ใน agent แม่",
+    `<p class="split">CodeBuddy <b>${fmt(seBy("codebuddy"))}</b> · Claude <b>${fmt(seBy("claude"))}</b> · Codex <b>${fmt(seBy("codex"))}</b> รอบ${se.credit?` · ${fmt(se.credit,1)} credit`:""}</p>`
+    + seToolLine
+    + `<p class="split">error <b>${fmt(seErr)}</b> ครั้ง (${seCalls?fmt(seErr/seCalls*100,0):0}%) · ไฟล์ที่แตะ <b>${fmt(seFiles)}</b></p>`) : "";
+  const cards = 2 + (CX.length>0) + (SE.length>0);
+  $("#duel").classList.toggle("three", cards===3);
+  $("#duel").classList.toggle("four", cards===4);
+  $("#duel").innerHTML = side(cbName,"var(--cb)",a,cbBig,models(CB),cbExtra) + side("Claude Code","var(--claude)",b,clBig,clTag,clExtra) + codexSide + serenaSide;
 }
 
 function claudeCost(){ const b=agg(CL); return planUsd ? planCost(CL).usd : (b.hasApi ? b.api : null); }
@@ -342,8 +358,9 @@ function renderCharts(){
     ...(cli.length ? [{name:"CodeBuddy CLI",color:"var(--cb)",get:g(by(cli,f))}] : []),
     ...(ide.length ? [{name:"CodeBuddy IDE",color:"var(--ide)",get:g(by(ide,f))}] : [])];
   const cxSeries = CX.length ? [{name:"Codex",color:"var(--codex)",get:g(by(CX,()=>1))}] : [];
-  barChart($("#c-turns"), days, [...cbSeries(()=>1), {name:"Claude",color:"var(--claude)",get:g(by(CL,()=>1))}, ...cxSeries], v=>fmt(v), "รอบต่อวัน");
-  legend($("#l-turns"), [...cbSeries(()=>1), {name:"Claude",color:"var(--claude)"}, ...cxSeries]);
+  const seSeries = SE.length ? [{name:"Serena",color:"var(--serena)",get:g(by(SE,()=>1))}] : [];
+  barChart($("#c-turns"), days, [...cbSeries(()=>1), {name:"Claude",color:"var(--claude)",get:g(by(CL,()=>1))}, ...cxSeries, ...seSeries], v=>fmt(v), "รอบต่อวัน");
+  legend($("#l-turns"), [...cbSeries(()=>1), {name:"Claude",color:"var(--claude)"}, ...cxSeries, ...seSeries]);
   const pd=planCost(CL).perDay;
   if(creditUsd && (planUsd || agg(CL).hasApi)){
     $("#c-cost-t").textContent = planUsd ? "จ่ายจริงต่อวัน (USD) · Claude = ค่าแพ็กเฉลี่ยรายวัน" : "ค่าใช้จ่ายต่อวัน (USD) · Claude = ราคา API";
@@ -483,11 +500,15 @@ function renderRepos(){
 let topAgent = store.get("ac-top") || "codebuddy";
 function renderTop(){
   const cxBtn=document.querySelector('.seg button[data-a="codex"]'); if(cxBtn) cxBtn.hidden = !CX.length;
+  const seBtn=document.querySelector('.seg button[data-a="serena"]'); if(seBtn) seBtn.hidden = !SE.length;
   if(topAgent==="codex" && !CX.length) topAgent="codebuddy";
+  if(topAgent==="serena" && !SE.length) topAgent="codebuddy";
   document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.a===topAgent)));
-  const score = r => topAgent!=="codebuddy" ? (apiUsd(r) ?? tokAll(r)/1e9) : (r.credit||0);
-  const rs=(topAgent==="codex"?CX:topAgent==="claude"?CL:CB).slice().sort((x,y)=>score(y)-score(x)).slice(0,12);
-  $("#top").innerHTML = `<thead><tr><th>เวลา</th><th>Repo</th><th>หมวด</th><th>งานที่สั่ง</th><th>Model</th><th class="n">${topAgent!=="codebuddy"?"มูลค่า API":"Credit"}</th><th class="n">Token</th><th class="n">Tools</th><th class="n">เวลา</th></tr></thead><tbody>`+
+  // Serena mixes credit rows and API rows, so rank it by what it is about: serena calls.
+  const score = r => topAgent==="serena" ? (r.n_serena_calls||0) : topAgent!=="codebuddy" ? (apiUsd(r) ?? tokAll(r)/1e9) : (r.credit||0);
+  const costHead = topAgent==="serena" ? "ค่าใช้จ่าย" : topAgent!=="codebuddy" ? "มูลค่า API" : "Credit";
+  const rs=(topAgent==="serena"?SE:topAgent==="codex"?CX:topAgent==="claude"?CL:CB).slice().sort((x,y)=>score(y)-score(x)).slice(0,12);
+  $("#top").innerHTML = `<thead><tr><th>เวลา</th><th>Repo</th><th>หมวด</th><th>งานที่สั่ง</th><th>Model</th><th class="n">${costHead}</th><th class="n">Token</th><th class="n">Tools</th><th class="n">เวลา</th></tr></thead><tbody>`+
     rs.map(r=>`<tr><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}</td><td class="mono">${esc(r.model)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${r.n_tool_calls||0}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
 }
 
@@ -501,6 +522,7 @@ function filterRows(){
   CB=ROWS.filter(r=>r.agent==="codebuddy" && (isIde(r)?agentChk.ide:agentChk.cli));
   CL=agentChk.claude ? ROWS.filter(r=>r.agent==="claude") : [];
   CX=agentChk.codex ? ROWS.filter(r=>r.agent==="codex") : [];
+  SE=[...CB,...CL,...CX].filter(r=>(r.n_serena_calls||0)>0);
 }
 function renderAll(){
   CATMAP = categories(ALL);
