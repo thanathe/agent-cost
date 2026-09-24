@@ -1,0 +1,53 @@
+tests/test_serena_capture.py
+  s_c5ee23472b62ad::t_6844ddda838e2e 99-101,103-141,169-179
+  s_c5ee23472b62ad::t_c8f88e45d909e3 102
+  s_c5ee23472b62ad::t_c991a85dba184f 51
+  s_c5ee23472b62ad::t_36ef9abf689605 63-64
+  s_c5ee23472b62ad::t_72d2bed016773b 142-168
+scripts/dashboard.py
+  s_c5ee23472b62ad::t_6b0bb599944d39 30-31
+scripts/dashboard.html
+  s_c5ee23472b62ad::t_a691b12e1eab03 292-294,299,303-306
+  s_c5ee23472b62ad::t_14eefe8259cac0 229
+  s_c5ee23472b62ad::t_9a878707af1b35 101-102
+  s_c5ee23472b62ad::t_8081ab45a62b35 361-363
+  s_c5ee23472b62ad::t_742dbbe4eb3c91 46
+  s_c5ee23472b62ad::t_19ce7b7c7c098f 297-298,300-302
+  s_c5ee23472b62ad::t_a954c527ae32e1 507-509
+  s_c5ee23472b62ad::t_7607a66cb5f6f0 230
+  s_c5ee23472b62ad::t_572bc0ad95c3c4 525
+  s_c5ee23472b62ad::t_26817d94c3f0eb 8
+  s_c5ee23472b62ad::t_4fe4c84d7b0c2b 511
+  s_c5ee23472b62ad::t_3443a5316f996b 503,505
+  s_c5ee23472b62ad::t_c6d20e4ffad8d8 510
+  s_c5ee23472b62ad::t_0cca1506e0d7b4 207
+  s_c5ee23472b62ad::t_4fc7af9d0d9dfe 295-296
+  s_c5ee23472b62ad::t_13e2e07b0bd313 17,24
+scripts/capture.py
+  s_c5ee23472b62ad::t_ce7eabf99b375a 325,330-334
+  s_c5ee23472b62ad::t_1e21ee85b696c3 268-269
+  s_c5ee23472b62ad::t_e1b7f059cbb8fd 261-262
+  s_c5ee23472b62ad::t_37d5d9228a26b0 303-311
+  s_c5ee23472b62ad::t_7fa9bc3914acaf 50-55
+  s_c5ee23472b62ad::t_1c07e5465817a8 354-356
+  s_c5ee23472b62ad::t_004decae350516 223-225
+  s_c5ee23472b62ad::t_53055b864c492e 267,270,272-273
+  s_c5ee23472b62ad::t_3c824bb00ee0f9 28
+  s_c5ee23472b62ad::t_ccdb1e2ec1f593 482-484
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "24b705233cb0f8715d4cb39eb3d8c0ced983303e",
+  "prompts": {},
+  "sessions": {
+    "s_c5ee23472b62ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d25d009-cbd1-4ba8-8556-74a611f6d079",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "natthaphon.kha <natthaphon.kha@skyai.co.th>"
+    }
+  }
+}
