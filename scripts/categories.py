@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """What kind of work a turn was — one rough bucketing shared by report.py and the dashboard.
 
-Deliberately dumb and readable: keywords in the prompt first, then the tools used, then the
-file extensions touched. Anything still undecided (a short "ok, go ahead") inherits whatever
-that session was already doing, which is usually right and keeps "other" small.
+Readable, rule-based classification: prompt terms first, then recognizable infrastructure file
+paths, then editing tools and source file extensions. Anything still undecided (a short "ok, go
+ahead") inherits whatever that session was already doing.
 
 The dashboard gets these patterns from the server, so the two views can never drift apart.
 Patterns are plain regex, case-insensitive, and safe to edit — they are the whole config.
@@ -17,11 +17,41 @@ CATS = [
     # Before ops/code so "plan the deploy" or "estimate this feature" count as planning.
     ("plan", "วางแผน / ประชุม", r"\bplan\b|วางแผน|estimate|ประเมิน|roadmap|ประชุม|meeting|grill|\bspec\b|\bprd\b"
                                 r"|requirement|architecture|ออกแบบระบบ|open question"),
-    ("ops", "deploy / git", r"deploy|release|sit\b|prod|docker|migrat|rollback|\bmerge\b|\bpush\b|\btag\b|pipeline|ci\b"),
+    ("environment", "DevOps · Env / Config",
+                   r"\.env(?:\.[\w-]+)?|environment variables?|env vars?"
+                   r"|configmaps?|config map|runtime config|environment config|configuration variable"
+                   r"|secret manager|secrets? store|vault secret|parameter store|ssm parameter"
+                   r"|(?:edit|update|modify|change|set|configure|check|inspect|review).{0,20}\benv(?:ironment)?\b"
+                   r"|(?:แก้|ปรับ|ตั้งค่า|ตรวจสอบ|เช็ก|เช็ค|ดู).{0,16}\benv(?:ironment)?\b"),
+    ("reliability", "DevOps · Monitoring / SRE",
+                    r"\bsre\b|observability|monitor(?:ing)?|prometheus|grafana|datadog|cloudwatch|new relic|splunk"
+                    r"|elastic(?:search)?|\belk\b|loki|opentelemetry|\botel\b|logging|logs?|metrics|tracing|traces?"
+                    r"|\bslo\b|\bsli\b|alert(?:ing)?|incident|on.?call|uptime|health check|disaster recovery|\bdr\b"),
+    ("cloud_resources", "DevOps · Cloud Resource",
+                         r"\bresources?\b|cloud resource|resource group|resource inventory|resource status|resource usage"
+                         r"|resource list|resource check|resource inspection|ทรัพยากร"
+                         r"|\b(?:ec2|s3|rds|ecs|eks|gke|aks|vpc|iam|lambda|cloudformation)\b"),
+    ("cicd", "DevOps · CI/CD",
+             r"\bci\s*/\s*cd\b|\bcicd\b|continuous integration|continuous delivery|continuous deployment"
+             r"|pipeline|github actions|gitlab ci|jenkins|buildkite|circleci|teamcity|azure pipelines?"
+             r"|argo ?cd|flux ?cd|gitops|build workflow|release automation|runner"),
+    ("deploy", "DevOps · Deploy / Release",
+               r"deploy(?:ment)?|release|rollout|rollback|blue.?green|canary|promotion to (?:sit|staging|prod)"
+               r"|\b(?:sit|staging|production|prod) environment\b|\bprod\b|\bsit\b|migrat(?:e|ion)"),
+    ("platform", "DevOps · IaC / Platform",
+                r"\bdevops\b|\binfra(?:structure)?\b|infrastructure as code|\biac\b|\bcloud\b|\baws\b|\bgcp\b|\bazure\b"
+                r"|\bterraform\b|\bopentofu\b|\bansible\b|\bpuppet\b|\bchef\b|\bkubernetes\b|\bk8s\b|\bhelm\b"
+                r"|docker|containers?|\bnetwork(?:ing)?\b|\bdns\b|load balancers?|ingress|firewalls?|\biam\b"
+                r"|\bvault\b|certificates?|\bssl\b|\btls\b|\bvpc\b|subnets?|security groups?"
+                r"|digitalocean|cloudflare|\bec2\b|\beks\b|\baks\b|\bgke\b|\brds\b|\bvm\b|virtual machines?"
+                r"|autoscal(?:e|ing)|backups?|storage"),
+    # Keep the old key so exported ledgers with a precomputed "ops" category still render.
+    ("ops", "DevOps · Git / Operations",
+            r"\bgit\b|\bmerge\b|\bpush\b|\btag\b|cherry.?pick|rebase|branch protection|\bprod\b|\bsit\b"),
     ("debug", "แก้บั๊ก", r"bug|debug|error|exception|\bfix\b|พัง|ไม่ขึ้น|ไม่ทำงาน|แก้ปัญหา|fail"),
     ("design", "design / UI", r"figma|design|\bui\b|\bux\b|หน้าจอ|layout|\bcss\b|สไตล์|ปุ่ม|ธีม|theme|icon"),
     ("docs", "เอกสาร / สรุป", r"readme|document|\bdocs?\b|สรุป|report|wiki|เขียนเอกสาร|changelog|post-?mortem"),
-    # Messages people send, not mail infrastructure (email routing / DNS belongs to ops).
+    # Messages people send, not mail infrastructure.
     ("admin", "งานออฟฟิศ", r"meegle|ลงเวลา|time ?record|timelog|tech task|lark|jira|ticket"
                            r"|ส่ง ?(อี)?เมล|ตอบ ?(อี)?เมล|ร่าง ?(อี)?เมล|inbox"),
     ("data", "ข้อมูล / query", r"\bsql\b|query|ดึงข้อมูล|export|dataset|วิเคราะห์ข้อมูล|report ข้อมูล"),
@@ -32,6 +62,11 @@ CODE_EXT = r"\.(ts|tsx|js|jsx|py|go|java|rb|php|rs|c|cpp|cs|sql|sh|proto|astro|v
 
 _COMPILED = [(k, re.compile(p, re.I)) for k, _, p in CATS]
 _CODE = re.compile(CODE_EXT, re.I)
+_CODE_REQUEST = re.compile(r"\b(?:implement|write|edit|modify|refactor|add|remove|create|build|update|change|convert|upgrade|replace|delete|generate|develop|coding|code)\b|เขียน|แก้ไข|ปรับปรุง|เพิ่ม|ลบ|สร้าง|เปลี่ยน|อัปเดต|อัพเดต", re.I)
+_ENV_FILE = re.compile(r"(^|/)\.env(?:\.[^/]+)?$|(^|/)(?:configmaps?|secrets?|environment|env-vars?)(?:[-_.][^/]+)?\.(?:ya?ml|json|toml)$", re.I)
+_CICD_FILE = re.compile(r"(^|/)\.github/workflows/|(^|/)(?:\.gitlab-ci\.ya?ml|Jenkinsfile|azure-pipelines\.ya?ml)$|(^|/)\.circleci/config\.ya?ml$", re.I)
+_RELIABILITY_PATH = re.compile(r"(^|/)(?:monitoring|observability|prometheus|grafana|alerts?)(/|$)", re.I)
+_PLATFORM_FILE = re.compile(r"(^|/)(?:terraform|infra|infrastructure|k8s|kubernetes|helm|ansible)(/|$)|(^|/)(?:Dockerfile|docker-compose(?:\.[^/]+)?|Chart\.ya?ml|kustomization\.ya?ml)$|\.(?:tf|tfvars|hcl)$", re.I)
 
 
 def own_category(row):
@@ -40,6 +75,14 @@ def own_category(row):
     for key, pattern in _COMPILED:
         if pattern.search(prompt):
             return key
+    for path in row.get("files_touched") or []:
+        path = str(path).replace("\\", "/")
+        for pattern, key in ((_ENV_FILE, "environment"), (_CICD_FILE, "cicd"),
+                             (_RELIABILITY_PATH, "reliability"), (_PLATFORM_FILE, "platform")):
+            if pattern.search(path):
+                return key
+    if _CODE_REQUEST.search(prompt):
+        return "code"
     if set(row.get("tools") or []) & EDIT_TOOLS:
         return "code"
     if any(_CODE.search(f) for f in (row.get("files_touched") or [])):

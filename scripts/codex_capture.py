@@ -24,6 +24,20 @@ def local_iso(value):
         return value
 
 
+def user_text(payload):
+    """Text from either the legacy user_message event or current rollout message item."""
+    message = payload.get("message")
+    if isinstance(message, str):
+        return " ".join(message.split())
+    content = payload.get("content") or []
+    if isinstance(content, list):
+        parts = [item.get("text", "") for item in content
+                 if isinstance(item, dict) and item.get("type") == "input_text"
+                 and isinstance(item.get("text"), str)]
+        return " ".join(" ".join(parts).split())
+    return ""
+
+
 def read_turns(path):
     turns = {}
     prompts = record_prompts()   # reads the config file — once per rollout, not per event
@@ -69,8 +83,12 @@ def read_turns(path):
             turn = turns.get(active)
             if not turn:
                 continue
-            if kind == "event_msg" and p.get("type") == "user_message" and prompts:
-                turn["prompt"] = " ".join((p.get("message") or "").split())[:400]
+            is_user_message = (kind == "event_msg" and p.get("type") == "user_message" or
+                               kind == "response_item" and p.get("type") == "message" and p.get("role") == "user")
+            if is_user_message and prompts:
+                text = user_text(p)
+                if text:
+                    turn["prompt"] = " ".join((turn["prompt"] + " " + text).split())[:400]
             if kind == "response_item" and p.get("type") in ("function_call", "custom_tool_call"):
                 call = p.get("call_id") or p.get("id")
                 if call:
