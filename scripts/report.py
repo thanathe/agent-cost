@@ -202,7 +202,7 @@ def error_section(rows, pricing):
         out += ["", "รอบที่ error แล้วเสีย credit มากสุด:", ""]
         for r in worst:
             why = r.get("error") or (f"tool error ×{r['n_tool_errors']}" if r.get("n_tool_errors") else "resume ต่อจากรอบที่ล่ม")
-            out.append(f"- `{(r.get('ts') or '')[:16].replace('T',' ')}` **{r['credit']:g} credit** · {r.get('repo','')} "
+            out.append(f"- `{(r.get('ts') or '')[:19].replace('T',' ')}` **{r['credit']:g} credit** · {r.get('repo','')} "
                        f"— {' '.join(str(why).split())[:110]}")
     return out + ["", "> 502/504 คือ gateway ล่มหลังโมเดลทำงานไปแล้ว — token ถูกคิดไปแล้ว และกด Retry = ส่ง context เดิมไปใหม่ทั้งก้อน "
                   "· CodeBuddy IDE ไม่เก็บ body ของ 5xx ลงดิสก์ เลยเห็นทางอ้อมจากรอบ `resume` เท่านั้น", ""]
@@ -378,18 +378,28 @@ def summary_table(rows, pricing):
 
 def detail_table(rows, pricing, limit=200):
     multi = len({r.get("_owner") for r in rows}) > 1
-    head = "| วันเวลา |" + (" คน |" if multi else "") + " Agent | Repo | งานที่สั่ง | Credit | Token | เวลา | Tools | ไฟล์ที่แตะ |"
-    out = [head, "|---|" + ("---|" if multi else "") + "---|---|---|--:|--:|--:|--:|--:|"]
+    head = "| วันเวลา |" + (" คน |" if multi else "") + " Agent | Model / effort | Repo | หมวด | งานที่สั่ง | Credit | Token | เวลา | Tools | ไฟล์ที่แตะ |"
+    out = [head, "|" + "|".join(["---"] * (12 if multi else 11)) + "|"]
+    cat = categories.assign(rows)
     for r in sorted(rows, key=lambda x: x.get("ts", ""), reverse=True)[:limit]:
-        prompt = (r.get("prompt") or "").replace("|", "\\|").replace("\n", " ")[:90]
-        el = f"{r['elapsed_sec']:.0f}s" if r.get("elapsed_sec") else "—"
+        prompt = (r.get("prompt") or "—").replace("|", "\\|").replace("\n", " ")[:90]
+        model = r.get("model") or "—"
+        if r.get("effort"):
+            model += f" ({r['effort']})"
+        model = str(model).replace("|", "\\|").replace("\n", " ")
+        cat_key = cat.get(r.get("turn_key") or id(r), "other")
+        category = categories.LABELS.get(cat_key, cat_key)
+        el = f"{r['elapsed_sec']:.0f}s" if r.get("elapsed_sec") is not None else "—"
+        files_touched = r.get("files_touched")
+        file_count = len(files_touched) if files_touched is not None else "—"
+        tool_calls = r.get("n_tool_calls") if r.get("n_tool_calls") is not None else "—"
         out.append(
-            f"| {(r.get('ts') or '')[:16].replace('T',' ')} |"
+            f"| {(r.get('ts') or '')[:19].replace('T',' ')} |"
             + (f" {r.get('_owner','')} |" if multi else "")
-            + f" {surface(r)} "
-            f"| {r.get('repo','')} | {prompt} | {r.get('credit') if r.get('credit') is not None else '—'} "
-            f"| {fmt(r.get('total_tokens',0))} | {el} | {r.get('n_tool_calls',0)} "
-            f"| {len(r.get('files_touched') or [])} |"
+            + f" {surface(r)} | {model} "
+            f"| {r.get('repo','')} | {category} | {prompt} | {r.get('credit') if r.get('credit') is not None else '—'} "
+            f"| {fmt(r.get('total_tokens',0))} | {el} | {tool_calls} "
+            f"| {file_count} |"
         )
     return "\n".join(out)
 

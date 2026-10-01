@@ -121,11 +121,32 @@ code{font-family:var(--mono);font-size:12px;background:var(--sunk);padding:1px 5
 .live.down .pulse{animation:none}
 @keyframes pulse{50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){.pulse{animation:none}}
-.field select{appearance:none;-webkit-appearance:none;font-family:var(--sans);font-size:14px;min-height:36px;padding:7px 32px 7px 10px;border:1px solid var(--line);border-radius:6px;background-color:var(--surface);background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;background-size:5px 5px;background-repeat:no-repeat;color:var(--ink);cursor:pointer;transition:border-color .15s ease,background-color .15s ease}
-.field select:hover{border-color:var(--ink-3)}
-.field select:focus-visible{outline:2px solid var(--cb);outline-offset:2px}
-.field select:disabled{opacity:.6;cursor:not-allowed}
-.field select option{background:var(--surface);color:var(--ink)}
+.select-field{position:relative;z-index:0;flex:0 1 184px;min-width:160px;gap:6px;color:var(--ink-2);font-weight:500}
+.select-field.is-open{z-index:20}
+.select-label{font-size:12px;line-height:1.4}
+.select-native{display:none}
+.select-trigger{position:relative;display:flex;align-items:center;width:100%;min-height:40px;padding:8px 38px 8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:500 13px/1.4 var(--sans);text-align:left;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease}
+.select-trigger:hover{border-color:var(--ink-3);background:color-mix(in srgb,var(--surface) 92%,var(--sunk))}
+.select-trigger:focus-visible{outline:2px solid var(--cb);outline-offset:2px}
+.select-trigger:disabled{opacity:.6;cursor:not-allowed}
+.select-value{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.select-chevron{position:absolute;right:14px;top:50%;width:7px;height:7px;border-right:1.6px solid var(--ink-3);border-bottom:1.6px solid var(--ink-3);transform:translateY(-65%) rotate(45deg);pointer-events:none;transition:border-color .16s ease,transform .16s ease}
+.select-field.is-open .select-trigger,.select-trigger:focus-visible{border-color:var(--cb);box-shadow:0 0 0 3px color-mix(in srgb,var(--cb) 16%,transparent)}
+.select-field.is-open .select-chevron{border-color:var(--cb);transform:translateY(-30%) rotate(225deg)}
+.select-popover{position:absolute;top:calc(100% + 6px);left:0;z-index:30;width:max(100%,220px);max-width:min(340px,calc(100vw - 24px));max-height:min(280px,50vh);overflow-y:auto;overscroll-behavior:contain;padding:5px;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:0 12px 28px color-mix(in srgb,var(--ink) 18%,transparent),0 2px 6px color-mix(in srgb,var(--ink) 8%,transparent);scrollbar-color:var(--ink-3) var(--sunk);scrollbar-width:thin;display:none}
+.select-field.is-open .select-popover{display:block}
+.select-popover.align-end{left:auto;right:0}
+.select-popover::-webkit-scrollbar{width:9px}
+.select-popover::-webkit-scrollbar-track{margin:5px;background:var(--sunk);border-radius:999px}
+.select-popover::-webkit-scrollbar-thumb{border:2px solid var(--sunk);border-radius:999px;background:var(--ink-3)}
+.select-popover::-webkit-scrollbar-thumb:hover{background:var(--ink-2)}
+.select-option{position:relative;display:flex;align-items:center;min-height:36px;padding:7px 32px 7px 10px;border-radius:6px;color:var(--ink-2);font-size:13px;line-height:1.4;cursor:pointer;outline:none;touch-action:manipulation}
+.select-option:hover,.select-option.is-active{background:var(--sunk);color:var(--ink)}
+.select-option[aria-selected="true"]{background:color-mix(in srgb,var(--cb) 10%,var(--surface));color:var(--ink);font-weight:500}
+.select-option[aria-selected="true"]::after{position:absolute;right:11px;width:8px;height:5px;border-left:1.5px solid var(--cb);border-bottom:1.5px solid var(--cb);content:"";transform:translateY(-1px) rotate(-45deg)}
+.select-popover:focus-visible{outline:2px solid var(--cb);outline-offset:-2px}
+@media (max-width:520px){.select-field{flex:1 1 calc(50% - 12px);min-width:138px}.select-popover{max-width:calc(100vw - 24px)}}
+@media (prefers-reduced-motion:reduce){.select-trigger,.select-chevron{transition:none}}
 .split{margin:0;font-size:12px;color:var(--ink-2);border-top:1px solid var(--line);padding-top:10px}
 .split .sw{width:8px;height:8px;margin-right:4px}
 .split .sep{color:var(--line);margin:0 6px}
@@ -159,10 +180,10 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
       <label class="field">เรท THB/USD<input id="fx" type="number" step="0.1" min="0" placeholder="ไม่แปลง"></label>
       <label class="field">แพ็ก Claude (USD/เดือน)<input id="plan" type="number" step="1" min="0" placeholder="ไม่มี"></label>
       <label class="field" id="f-plancx" hidden>แพ็ก Codex (USD/เดือน)<input id="plancx" type="number" step="1" min="0" placeholder="ไม่มี"></label>
-      <label class="field">เฉลี่ยค่าแพ็ก<select id="basis"><option value="calendar">ทุกวันในปฏิทิน</option><option value="20">วันที่ใช้ ÷ 20 วัน/เดือน</option><option value="22">วันที่ใช้ ÷ 22 วัน/เดือน</option></select></label>
-      <label class="field">CodeBuddy<select id="cbsrc"><option value="all">CLI + IDE</option><option value="cli">CLI เท่านั้น</option><option value="ide">IDE เท่านั้น</option></select></label>
-      <label class="field">หมวดงาน<select id="cat"><option value="all">ทั้งหมด</option></select></label>
-      <label class="field">ช่วงวัน<select id="span"><option value="0">ทั้งหมด</option><option value="1">วันนี้</option><option value="7">7 วัน</option><option value="30">30 วัน</option><option value="custom">กำหนดเอง</option></select></label>
+      <div class="field select-field"><span class="select-label" id="basis-label">เฉลี่ยค่าแพ็ก</span><select id="basis"><option value="calendar">ทุกวันในปฏิทิน</option><option value="20">วันที่ใช้ ÷ 20 วัน/เดือน</option><option value="22">วันที่ใช้ ÷ 22 วัน/เดือน</option></select></div>
+      <div class="field select-field"><span class="select-label" id="cbsrc-label">CodeBuddy</span><select id="cbsrc"><option value="all">CLI + IDE</option><option value="cli">CLI เท่านั้น</option><option value="ide">IDE เท่านั้น</option></select></div>
+      <div class="field select-field"><span class="select-label" id="cat-label">หมวดงาน</span><select id="cat"><option value="all">ทั้งหมด</option></select></div>
+      <div class="field select-field"><span class="select-label" id="span-label">ช่วงวัน</span><select id="span"><option value="0">ทั้งหมด</option><option value="1">วันนี้</option><option value="7">7 วัน</option><option value="30">30 วัน</option><option value="custom">กำหนดเอง</option></select></div>
       <label class="field" id="f-from" hidden>จาก<input id="from" type="date"></label>
       <label class="field" id="f-to" hidden>ถึง<input id="to" type="date"></label>
     </div>
@@ -224,6 +245,12 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
 <script>
 const $ = s => document.querySelector(s);
 const fmt = (n,d=0) => n==null||!isFinite(n) ? "—" : n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtDuration = sec => {
+  if(sec==null||!isFinite(sec)) return "—";
+  const total=Math.max(0,Math.round(sec)), h=Math.floor(total/3600), m=Math.floor(total%3600/60), s=total%60;
+  return h ? `${h} ชม. ${m} นาที ${String(s).padStart(2,"0")} วิ` : m ? `${m} นาที ${String(s).padStart(2,"0")} วิ` : `${s} วิ`;
+};
+const fmtStamp = ts => String(ts||"").slice(5,19).replace("T"," ");
 const fM = n => !isFinite(n) ? "—" : n>=1e9 ? fmt(n/1e9,2)+"B" : n>=1e6 ? fmt(n/1e6,1)+"M" : n>=1e3 ? fmt(n/1e3,1)+"k" : fmt(n);
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const store = { get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}} };
@@ -263,7 +290,8 @@ function agg(rs){
   rs.forEach(r=>{ s.credit+=r.credit||0; const u=apiUsd(r); if(u!=null){s.api+=u;s.hasApi=true} s.ctx+=ctx(r); s.out+=r.output_tokens||0; s.sec+=r.elapsed_sec||0; s.tools+=r.n_tool_calls||0; s.days.add(r.ts.slice(0,10)); });
   return s;
 }
-const models = rs => [...new Set(rs.map(r=>r.model).filter(Boolean))].slice(0,3).join(" · ") || "—";
+const modelLabel = r => r.model ? `${r.model}${r.effort ? ` (${r.effort})` : ""}` : "—";
+const models = rs => [...new Set(rs.map(modelLabel).filter(x=>x!=="—"))].slice(0,3).join(" · ") || "—";
 
 function renderDuel(){
   const a=agg(CB), b=agg(CL), pc=planCost(CL), plan=(PRICING._plans||{}).claude||{};
@@ -273,7 +301,7 @@ function renderDuel(){
     <dl class="kv">
       <div><dt>รอบ</dt><dd>${fmt(s.n)}</dd></div><div><dt>session</dt><dd>${fmt(s.sess)}</dd></div><div><dt>วันที่มีข้อมูล</dt><dd>${s.days.size}</dd></div>
       <div><dt>token</dt><dd>${fM(s.ctx+s.out)}</dd></div><div><dt>output token</dt><dd>${fM(s.out)}</dd></div><div><dt>tool calls</dt><dd>${fmt(s.tools)}</dd></div>
-      <div><dt>เวลารวม</dt><dd>${fmt(s.sec/3600,1)} ชม.</dd></div><div><dt>เฉลี่ย / รอบ</dt><dd>${s.n?fmt(s.sec/s.n):"—"} s</dd></div><div><dt>token / รอบ</dt><dd>${s.n?fM((s.ctx+s.out)/s.n):"—"}</dd></div>
+      <div><dt>เวลารวม</dt><dd>${fmtDuration(s.sec)}</dd></div><div><dt>เฉลี่ย / รอบ</dt><dd>${s.n?fmt(s.sec/s.n):"—"} s</dd></div><div><dt>token / รอบ</dt><dd>${s.n?fM((s.ctx+s.out)/s.n):"—"}</dd></div>
     </dl>${extra||""}</div>`;
   const cbBig = `${fmt(a.credit,2)}<small>credit</small>` + (creditUsd?`<small>≈ ${usdThb(a.credit*creditUsd)}</small>`:"");
   const clBig = planUsd ? `${usdThb(pc.usd)}<small>${planBasis==="calendar"?"จ่ายจริง · "+pc.n+" วันปฏิทิน":"ใช้ "+pc.n+" วัน × $"+fmt(planUsd/Number(planBasis),2)}</small>` : (b.hasApi ? `${usdThb(b.api)}<small>ราคา API</small>` : `—<small>ใส่แพ็กหรือราคา API</small>`);
@@ -367,6 +395,128 @@ function legend(el, series){ el.innerHTML = series.map(x=>`<span><i class="sw" s
 // Rough bucketing: first keyword that matches wins, then tools/files decide, else "อื่น ๆ".
 // Patterns come from scripts/categories.py so report and dashboard can never disagree.
 let CATS = [], CAT_LABEL = {other:"อื่น ๆ", code:"เขียนโค้ด"}, EDIT_TOOLS = ["Edit","Write"], CODE_EXT = /$^/;
+const dropdownUI = new Map();
+function setActiveOption(ui,index,moveFocus=false){
+  const options=[...ui.popover.querySelectorAll(".select-option")];
+  if(!options.length){ui.popover.removeAttribute("aria-activedescendant");return;}
+  index=(index+options.length)%options.length;
+  options.forEach((option,i)=>option.classList.toggle("is-active",i===index));
+  const active=options[index];
+  ui.popover.dataset.activeValue=active.dataset.value;
+  ui.popover.setAttribute("aria-activedescendant",active.id);
+  if(moveFocus){ui.popover.focus({preventScroll:true});active.scrollIntoView({block:"nearest"});}
+}
+function closeDropdown(ui,restoreFocus=false){
+  ui.field.classList.remove("is-open");
+  ui.button.setAttribute("aria-expanded","false");
+  ui.popover.removeAttribute("aria-activedescendant");
+  if(restoreFocus)ui.button.focus({preventScroll:true});
+}
+function closeOtherDropdowns(keep=null){dropdownUI.forEach(ui=>{if(ui!==keep&&ui.field.classList.contains("is-open"))closeDropdown(ui);});}
+function syncDropdown(select){
+  const ui=dropdownUI.get(select); if(!ui)return;
+  const previousActive=ui.popover.dataset.activeValue;
+  const source=[...select.options], rendered=[...ui.popover.querySelectorAll(".select-option")];
+  const changed=source.length!==rendered.length||source.some((option,index)=>rendered[index]?.dataset.value!==option.value||rendered[index]?.textContent!==option.textContent);
+  if(changed){
+    const scrollTop=ui.popover.scrollTop;
+    ui.popover.replaceChildren();
+    source.forEach((option,index)=>{
+      const item=document.createElement("div");
+      item.className="select-option"; item.id=`${select.id}-option-${index}`;
+      item.setAttribute("role","option"); item.dataset.value=option.value; item.textContent=option.textContent;
+      ui.popover.append(item);
+    });
+    ui.popover.scrollTop=scrollTop;
+  }
+  const selected=select.selectedOptions[0];
+  ui.value.textContent=selected?.textContent||"เลือก…";
+  ui.button.disabled=select.disabled;
+  const options=[...ui.popover.querySelectorAll(".select-option")];
+  options.forEach(option=>option.setAttribute("aria-selected",String(option.dataset.value===select.value)));
+  let activeIndex=options.findIndex(option=>option.dataset.value===previousActive);
+  if(activeIndex<0)activeIndex=options.findIndex(option=>option.dataset.value===select.value);
+  if(activeIndex<0)activeIndex=0;
+  if(ui.field.classList.contains("is-open"))setActiveOption(ui,activeIndex);
+  else if(options[activeIndex])ui.popover.dataset.activeValue=options[activeIndex].dataset.value;
+}
+function setupDropdown(select){
+  const field=select.closest(".select-field"), label=field?.querySelector(".select-label");
+  if(!field||!label||dropdownUI.has(select))return;
+  if(!label.id)label.id=`${select.id}-label`;
+  const value=document.createElement("span"); value.className="select-value"; value.id=`${select.id}-value`;
+  const chevron=document.createElement("span"); chevron.className="select-chevron"; chevron.setAttribute("aria-hidden","true");
+  const button=document.createElement("button"); button.type="button"; button.className="select-trigger";
+  button.setAttribute("aria-labelledby",`${label.id} ${value.id}`); button.setAttribute("aria-haspopup","listbox"); button.setAttribute("aria-expanded","false"); button.setAttribute("aria-controls",`${select.id}-listbox`);
+  button.append(value,chevron);
+  const popover=document.createElement("div"); popover.className="select-popover"; popover.id=`${select.id}-listbox`;
+  popover.setAttribute("role","listbox"); popover.setAttribute("aria-labelledby",label.id); popover.tabIndex=-1;
+  const ui={select,field,label,value,button,popover,typeBuffer:"",typeTimer:null};
+  dropdownUI.set(select,ui);
+  select.classList.add("select-native"); select.tabIndex=-1; select.setAttribute("aria-hidden","true");
+  select.after(button,popover);
+  select.addEventListener("change",()=>syncDropdown(select));
+  const open=()=>{
+    if(button.disabled)return;
+    closeOtherDropdowns(ui);
+    field.classList.add("is-open"); button.setAttribute("aria-expanded","true");
+    popover.classList.remove("align-end");
+    const rect=popover.getBoundingClientRect();
+    if(rect.right>window.innerWidth-12)popover.classList.add("align-end");
+    const options=[...popover.querySelectorAll(".select-option")];
+    const selected=options.findIndex(option=>option.dataset.value===select.value);
+    setActiveOption(ui,selected<0?0:selected,true);
+  };
+  button.addEventListener("click",()=>field.classList.contains("is-open")?closeDropdown(ui):open());
+  button.addEventListener("keydown",event=>{
+    if(["ArrowDown","ArrowUp","Enter"," "].includes(event.key)){
+      event.preventDefault(); if(!field.classList.contains("is-open"))open();
+    }
+  });
+  popover.addEventListener("click",event=>{
+    const option=event.target.closest(".select-option"); if(!option)return;
+    select.value=option.dataset.value;
+    select.dispatchEvent(new Event("change",{bubbles:true}));
+    closeDropdown(ui,true);
+  });
+  popover.addEventListener("pointermove",event=>{
+    const option=event.target.closest(".select-option"); if(!option)return;
+    const index=[...popover.querySelectorAll(".select-option")].indexOf(option);
+    if(index>=0)setActiveOption(ui,index);
+  });
+  popover.addEventListener("keydown",event=>{
+    const options=[...popover.querySelectorAll(".select-option")];
+    const current=options.findIndex(option=>option.dataset.value===popover.dataset.activeValue);
+    if(event.key==="Escape"){event.preventDefault();closeDropdown(ui,true);return;}
+    if(event.key==="Tab"){closeDropdown(ui,true);return;}
+    if(event.key==="ArrowDown"){event.preventDefault();setActiveOption(ui,current+1,true);return;}
+    if(event.key==="ArrowUp"){event.preventDefault();setActiveOption(ui,current-1,true);return;}
+    if(event.key==="Home"){event.preventDefault();setActiveOption(ui,0,true);return;}
+    if(event.key==="End"){event.preventDefault();setActiveOption(ui,options.length-1,true);return;}
+    if(event.key==="Enter"||event.key===" "){
+      event.preventDefault(); const active=options.find(option=>option.dataset.value===popover.dataset.activeValue);
+      if(active){select.value=active.dataset.value;select.dispatchEvent(new Event("change",{bubbles:true}));closeDropdown(ui,true);}
+      return;
+    }
+    if(event.key.length===1&&!event.ctrlKey&&!event.metaKey&&!event.altKey){
+      ui.typeBuffer+=event.key.toLocaleLowerCase(); clearTimeout(ui.typeTimer);
+      ui.typeTimer=setTimeout(()=>{ui.typeBuffer="";},700);
+      const start=Math.max(0,current+1), ordered=[...options.slice(start),...options.slice(0,start)];
+      const match=ordered.find(option=>option.textContent.trim().toLocaleLowerCase().startsWith(ui.typeBuffer));
+      if(match){event.preventDefault();setActiveOption(ui,options.indexOf(match),true);}
+    }
+  });
+  new MutationObserver(()=>syncDropdown(select)).observe(select,{childList:true,subtree:true,characterData:true});
+  syncDropdown(select);
+}
+function setupDropdowns(){
+  document.querySelectorAll(".select-field select").forEach(setupDropdown);
+  document.addEventListener("pointerdown",event=>{
+    const field=event.target.closest(".select-field");
+    dropdownUI.forEach(ui=>{if(ui.field!==field&&ui.field.classList.contains("is-open"))closeDropdown(ui);});
+  });
+  window.addEventListener("resize",()=>dropdownUI.forEach(ui=>{if(ui.field.classList.contains("is-open"))closeDropdown(ui,true);}));
+}
 function setCategories(cfg){
   if(!cfg) return;
   CATS = (cfg.cats||[]).map(c=>[c.key, c.label, new RegExp(c.pattern, "i")]);
@@ -378,6 +528,7 @@ function setCategories(cfg){
     Object.entries(CAT_LABEL).forEach(([k,l])=>sel.add(new Option(l,k)));
     const saved=store.get("ac-cat"); if(saved && CAT_LABEL[saved]){ catFilter=saved; sel.value=saved; }
   }
+  syncDropdown(sel);
 }
 // One classification per ledger snapshot, so filter, pills and bars always agree.
 const catOf = r => CATMAP.get(r.turn_key) || "other";
@@ -461,8 +612,8 @@ const costCell = r => r.agent==="codebuddy" ? `${fmt(r.credit,2)} cr` : (apiUsd(
 function renderLatest(){
   const rs=[...ROWS].sort((x,y)=>x.ts<y.ts?1:-1).slice(0,10);
   $("#latest-n").textContent = `${fmt(ROWS.length)} รอบในช่วงนี้`;
-  $("#latest").innerHTML = `<thead><tr><th>เวลา</th><th>Agent</th><th>Repo</th><th>หมวด</th><th>งานที่สั่ง</th><th class="n">Credit / มูลค่า API</th><th class="n">Token</th><th class="n">เวลา</th></tr></thead><tbody>`+
-    rs.map(r=>`<tr class="${newKeys.has(r.turn_key)?"fresh":""}"><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td style="white-space:nowrap">${agentCell(r.agent,r)}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}${errPill(r)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
+  $("#latest").innerHTML = `<thead><tr><th>เวลา</th><th>Agent</th><th>Model / Effort</th><th>Repo</th><th>หมวด</th><th>งานที่สั่ง</th><th class="n">Credit / มูลค่า API</th><th class="n">Token</th><th class="n">เวลา</th></tr></thead><tbody>`+
+    rs.map(r=>`<tr class="${newKeys.has(r.turn_key)?"fresh":""}"><td class="mono" style="white-space:nowrap">${fmtStamp(r.ts)}</td><td style="white-space:nowrap">${agentCell(r.agent,r)}</td><td class="mono" style="white-space:nowrap">${esc(modelLabel(r))}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}${errPill(r)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${fmtDuration(r.elapsed_sec)}</td></tr>`).join("")+"</tbody>";
 }
 function errPill(r){
   const bits=[]; if(r.n_api_errors) bits.push(`API error ×${r.n_api_errors}`);
@@ -475,7 +626,7 @@ function renderRepos(){
   const m=new Map(); ROWS.forEach(r=>{ const k=r.repo+"|"+r.agent+"|"+(r.source||""); (m.get(k)||m.set(k,{repo:r.repo,agent:r.agent,source:r.source,rows:[]}).get(k)).rows.push(r); });
   const list=[...m.values()].map(o=>({...o,s:agg(o.rows)})).sort((x,y)=>(x.agent===y.agent?0:x.agent==="codebuddy"?-1:1)||(x.agent==="codebuddy"?y.s.credit-x.s.credit:y.s.ctx-x.s.ctx));
   $("#repos").innerHTML = `<thead><tr><th>Repo</th><th>Agent</th><th>หมวดหลัก</th><th class="n">รอบ</th><th class="n">Credit</th><th class="n">มูลค่า API</th><th class="n">Token</th><th class="n">Output</th><th class="n">เวลา</th></tr></thead><tbody>`+
-    list.map(o=>`<tr><td>${esc(o.repo)}</td><td style="white-space:nowrap">${agentCell(o.agent,{source:o.source})}</td><td>${catPill(topCat(o.rows))}</td><td class="n">${o.s.n}</td><td class="n">${o.agent==="codebuddy"?fmt(o.s.credit,2):"—"}</td><td class="n">${o.s.hasApi?"$"+fmt(o.s.api,2):"—"}</td><td class="n">${fM(o.s.ctx+o.s.out)}</td><td class="n">${fM(o.s.out)}</td><td class="n">${fmt(o.s.sec/60,0)} น.</td></tr>`).join("")+"</tbody>";
+    list.map(o=>`<tr><td>${esc(o.repo)}</td><td style="white-space:nowrap">${agentCell(o.agent,{source:o.source})}</td><td>${catPill(topCat(o.rows))}</td><td class="n">${o.s.n}</td><td class="n">${o.agent==="codebuddy"?fmt(o.s.credit,2):"—"}</td><td class="n">${o.s.hasApi?"$"+fmt(o.s.api,2):"—"}</td><td class="n">${fM(o.s.ctx+o.s.out)}</td><td class="n">${fM(o.s.out)}</td><td class="n">${fmtDuration(o.s.sec)}</td></tr>`).join("")+"</tbody>";
 }
 
 let topAgent = store.get("ac-top") || "codebuddy";
@@ -486,7 +637,7 @@ function renderTop(){
   const score = r => topAgent!=="codebuddy" ? (apiUsd(r) ?? tokAll(r)/1e9) : (r.credit||0);
   const rs=(topAgent==="codex"?CX:topAgent==="claude"?CL:CB).slice().sort((x,y)=>score(y)-score(x)).slice(0,12);
   $("#top").innerHTML = `<thead><tr><th>เวลา</th><th>Repo</th><th>หมวด</th><th>งานที่สั่ง</th><th>Model</th><th class="n">${topAgent!=="codebuddy"?"มูลค่า API":"Credit"}</th><th class="n">Token</th><th class="n">Tools</th><th class="n">เวลา</th></tr></thead><tbody>`+
-    rs.map(r=>`<tr><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}</td><td class="mono">${esc(r.model)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${r.n_tool_calls||0}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
+    rs.map(r=>`<tr><td class="mono" style="white-space:nowrap">${fmtStamp(r.ts)}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}</td><td class="mono">${esc(modelLabel(r))}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${r.n_tool_calls||0}</td><td class="n">${fmtDuration(r.elapsed_sec)}</td></tr>`).join("")+"</tbody>";
 }
 
 function filterRows(){
@@ -538,9 +689,11 @@ function applyPlanDefault(){
   const fx=(PRICING._fx||{}).thb_per_usd; if(fx>0 && store.get("ac-fx")===null){ fxRate=fx; $("#fx").value=fx; }
   const dpm=((PRICING._plans||{}).claude||{}).days_per_month; if(dpm>0 && store.get("ac-basis")===null){ planBasis=String(dpm); if(![...$("#basis").options].some(o=>o.value===planBasis)) $("#basis").add(new Option(`วันที่ใช้ ÷ ${dpm} วัน/เดือน`,planBasis)); $("#basis").value=planBasis; }
   const c=((PRICING._plans||{}).codebuddy||{}).usd_per_credit; if(c>0 && store.get("ac-cpx")===null){ creditUsd=c; $("#cpx").value=c; }
+  syncDropdown($("#basis"));
 }
 
 (function init(){
+  setupDropdowns();
   const c=parseFloat(store.get("ac-cpx")); if(c>0){ creditUsd=c; $("#cpx").value=c; }
   if(planTouched){ const p=parseFloat(store.get("ac-plan")); planUsd = p>0?p:null; $("#plan").value = planUsd ?? ""; }
   const pcxs=parseFloat(store.get("ac-plancx")); if(pcxs>0){ planCxUsd=pcxs; $("#plancx").value=pcxs; }
@@ -551,11 +704,14 @@ function applyPlanDefault(){
   catSort = store.get("ac-catsort") || "turns";
   $("#cat").addEventListener("change",e=>{ catFilter=e.target.value; store.set("ac-cat",catFilter); renderAll(); });
   const cs=store.get("ac-cbsrc"); if(cs){ cbSource=cs; $("#cbsrc").value=cs; }
+  syncDropdown($("#cbsrc"));
   $("#cbsrc").addEventListener("change",e=>{ cbSource=e.target.value; store.set("ac-cbsrc",cbSource); renderAll(); });
   const bs=store.get("ac-basis"); if(bs){ planBasis=bs; $("#basis").value=bs; }
+  syncDropdown($("#basis"));
   $("#basis").addEventListener("change",e=>{ planBasis=e.target.value; store.set("ac-basis",planBasis); renderAll(); });
   const sp=store.get("ac-span");
   if(sp==="custom"){ spanDays="custom"; $("#span").value="custom"; } else if(sp!==null && parseInt(sp)>=0){ spanDays=parseInt(sp); $("#span").value=sp; }
+  syncDropdown($("#span"));
   fromDay=store.get("ac-from")||""; toDay=store.get("ac-to")||""; $("#from").value=fromDay; $("#to").value=toDay;
   const showCustom=()=>{ const on=spanDays==="custom"; $("#f-from").hidden=!on; $("#f-to").hidden=!on; };
   // Empty custom dates default to the range the ledger actually covers.

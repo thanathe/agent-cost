@@ -9,7 +9,8 @@
 The dashboard has the same thing as an "Export" button (it refreshes old installs by itself).
 
 What leaves your machine: per-turn numbers (tokens, credits, time, tool-call and error counts),
-model, agent, date, repo name and a work category worked out here from your prompt.
+model and reasoning effort (when available), agent, date, repo name and a work category worked
+out here from your prompt.
 What does not: prompts, file paths, tool names, error text, transcript locations.
 
 The first line is a `_meta` record with your plan settings from pricing.json, so the compiler
@@ -23,7 +24,7 @@ from cost_paths import ledger_dir
 import categories
 
 KEEP = ("turn_key", "agent", "ts", "credit", "input_tokens", "output_tokens", "cache_read_tokens",
-        "cache_write_tokens", "total_tokens", "usage_v", "elapsed_sec", "model", "n_subagents",
+        "cache_write_tokens", "total_tokens", "usage_v", "elapsed_sec", "model", "effort", "n_subagents",
         "subagent_tokens", "subagent_models", "via", "source", "resumed", "n_tool_errors",
         "n_api_errors", "n_tool_calls")
 

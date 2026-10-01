@@ -65,10 +65,14 @@ def read_turns(path):
             if turn_id and (kind in ("turn_context", "token_usage_record") or
                             kind == "event_msg" and p.get("type") in ("task_started", "task_complete")):
                 turn = turns.setdefault(turn_id, {"usage": {}, "tools": {}, "model": None,
-                    "cwd": cwd, "start": event.get("timestamp"), "end": None, "prompt": ""})
+                    "effort": None, "cwd": cwd, "start": event.get("timestamp"), "end": None, "prompt": ""})
                 if kind == "turn_context":
                     active = turn_id
                     turn["model"] = p.get("model")
+                    settings = p.get("collaboration_mode")
+                    settings = (settings.get("settings") or {}) if isinstance(settings, dict) else {}
+                    effort = p.get("effort") or settings.get("reasoning_effort")
+                    turn["effort"] = effort.strip() if isinstance(effort, str) and effort.strip() else None
                     turn["cwd"] = p.get("cwd") or cwd
                 elif kind == "token_usage_record":
                     response = p.get("response_id")
@@ -115,7 +119,7 @@ def read_turns(path):
             "repo": os.path.basename(turn["cwd"].rstrip("/")), "prompt": turn["prompt"],
             "credit": None, "input_tokens": inp, "cache_read_tokens": cr, "cache_write_tokens": cw,
             "output_tokens": usage["output_tokens"], "total_tokens": inp + cr + cw + usage["output_tokens"],
-            "usage_v": 2, "elapsed_sec": elapsed, "model": turn["model"],
+            "usage_v": 2, "elapsed_sec": elapsed, "model": turn["model"], "effort": turn["effort"],
             "n_tool_calls": len(turn["tools"]), "tools": sorted(set(turn["tools"].values())),
             "files_touched": [], "transcript": str(path)})
     return records
