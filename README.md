@@ -41,9 +41,9 @@ Everything stays on your machine. No server, no account, no telemetry.
 
 ## Supported agents
 
-| | Claude Code | CodeBuddy CLI | CodeBuddy IDE | Codex |
+| | Claude Code | CodeBuddy CLI | CodeBuddy IDE / VS Code | Codex |
 |---|---|---|---|---|
-| How turns are captured | `Stop` hook | `Stop` hook | reads the app's history | reads local rollouts |
+| How turns are captured | `Stop` hook | `Stop` hook | reads IDE and VS Code extension history | reads local rollouts |
 | Credits / cost from the vendor | ❌ not in transcripts | ✅ real credits | ✅ real credits | ❌ none |
 | Tokens · duration · tools · prompt | ✅ | ✅ | ✅ | ✅ |
 | Money comes from | your plan, or API prices | credits × your price | credits × your price | your plan, or API prices |
@@ -168,19 +168,19 @@ right command for you.
 
 ---
 
-## Collectors: CodeBuddy IDE & Codex
+## Collectors: CodeBuddy IDE / VS Code & Codex
 
 Neither has a hook, so both are read from files they already write locally. The dashboard collects
 them while it runs; otherwise run them yourself before a report.
 
 ```bash
 S=~/.claude/skills/agent-cost/scripts
-python3 $S/ide_sync.py                 # CodeBuddy IDE  (--dry-run, --watch, --resync)
+python3 $S/ide_sync.py                 # CodeBuddy IDE / VS Code  (--dry-run, --watch, --resync)
 python3 $S/codex_capture.py            # Codex, current month  (--month YYYY-MM, --watch)
 ```
 
-- **CodeBuddy IDE** lands as `agent: codebuddy`, `source: ide`, so it adds up with the CLI but can be
-  split anywhere. It reads the extension's history under `~/Library/Application Support` (macOS),
+- **CodeBuddy IDE / VS Code extension** lands as `agent: codebuddy`, `source: ide`, so it adds up with the CLI but can be
+  split anywhere. It reads both clients' history under `~/Library/Application Support` (macOS),
   `%APPDATA%` (Windows) or `~/.config` (Linux) — override with `CODEBUDDY_APPDATA`. It imports
   everything it finds, which can be months of history on the first run.
 - **Codex** writes its own `codex-ledger.jsonl` from `$CODEX_HOME` (default `~/.codex`). Only turns

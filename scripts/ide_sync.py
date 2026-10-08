@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Pull CodeBuddy IDE turns into the ledger.
+"""Pull CodeBuddy IDE and VS Code extension turns into the ledger.
 
-    python3 ide_sync.py            # append every finished IDE request not yet in the ledger
+    python3 ide_sync.py            # append every finished IDE / VS Code request not yet in the ledger
     python3 ide_sync.py --dry-run  # count only
     python3 ide_sync.py --watch    # keep syncing every 3 s (dashboard.py already does this itself)
     python3 ide_sync.py --resync   # drop all IDE rows and re-read history with current rules (backs up first)
 
 The IDE never fires the Stop hook, but it does keep per-request usage on disk:
 
-    <app data>/CodeBuddyExtension/Data/<uid>/CodeBuddyIDE/<uid>/
+    <app data>/CodeBuddyExtension/Data/<uid>/{CodeBuddyIDE,VSCode}/<uid>/
         history/<md5(workspace path)>/<conversation>/index.json   ← requests[].usage
         history/.../messages/<id>.json                              ← prompt, model, tool calls
 
@@ -59,7 +59,7 @@ def md5(s):
 
 
 def known_workspaces():
-    """md5(path) → path from the IDE's workspaceStorage; md5 → folder name from log file names."""
+    """Map workspace URIs and extension log names to workspace paths and fallback labels."""
     paths, names = {}, {}
     for f in globs("CodeBuddy", "User", "workspaceStorage", "*", "workspace.json"):
         try:
@@ -69,9 +69,13 @@ def known_workspaces():
         if uri.startswith("file://"):
             p = urllib.parse.unquote(uri[7:]).rstrip("/")
             paths[md5(p)] = p
-    for f in globs("CodeBuddyExtension", "Logs", "CodeBuddyIDE", "*", "*__*.log"):
-        name, h = os.path.basename(f)[:-4].rsplit("__", 1)
-        names.setdefault(h, name)
+    for client in ("CodeBuddyIDE", "VSCode"):
+        for f in globs("CodeBuddyExtension", "Logs", client, "*", "*__*.log"):
+            try:
+                name, h = os.path.basename(f)[:-4].rsplit("__", 1)
+            except ValueError:
+                continue
+            names.setdefault(h, name)
     return paths, names
 
 
@@ -245,13 +249,14 @@ def sync(dry_run=False, since=None):
     except Exception:
         state = {}
     changed = {}
-    for f in globs("CodeBuddyExtension", "Data", "*", "CodeBuddyIDE", "*", "history", "*", "*", "index.json"):
-        try:
-            mt = os.stat(f).st_mtime_ns
-        except OSError:
-            continue
-        if state.get(f) != mt:
-            changed[f] = mt
+    for client in ("CodeBuddyIDE", "VSCode"):
+        for f in globs("CodeBuddyExtension", "Data", "*", client, "*", "history", "*", "*", "index.json"):
+            try:
+                mt = os.stat(f).st_mtime_ns
+            except OSError:
+                continue
+            if state.get(f) != mt:
+                changed[f] = mt
     if not changed:
         return []
 
@@ -317,7 +322,7 @@ def resync():
 def main():
     argv = sys.argv[1:]
     if "--watch" in argv:
-        print("watching CodeBuddy IDE history (Ctrl+C to stop)", flush=True)
+        print("watching CodeBuddy IDE and VS Code history (Ctrl+C to stop)", flush=True)
         try:
             while True:
                 try:
@@ -334,7 +339,7 @@ def main():
         return resync()
     dry = "--dry-run" in argv
     new = sync(dry_run=dry)
-    print(f"{'would add' if dry else 'added'} {len(new)} CodeBuddy IDE turn(s)")
+    print(f"{'would add' if dry else 'added'} {len(new)} CodeBuddy IDE / VS Code turn(s)")
 
 
 if __name__ == "__main__":

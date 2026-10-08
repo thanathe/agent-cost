@@ -34,7 +34,7 @@ _ide = {"at": 0.0, "lock": threading.Lock()}
 
 
 def sync_ide():
-    """CodeBuddy IDE has no Stop hook — fold its on-disk history in, at most every 3 s."""
+    """CodeBuddy IDE and VS Code have no Stop hook — fold their on-disk history in every 3 s."""
     if not _ide["lock"].acquire(blocking=False):
         return
     try:

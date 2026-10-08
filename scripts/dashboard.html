@@ -154,6 +154,22 @@ code{font-family:var(--mono);font-size:12px;background:var(--sunk);padding:1px 5
 .chart-legend{margin-top:8px;font-size:12px;flex-wrap:wrap}
 .split b{font-family:var(--mono);font-weight:600;color:var(--ink)}
 tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
+.model-usage-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.model-usage-kpi{display:flex;flex-direction:column;gap:3px;min-width:0;padding:12px 14px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+.model-usage-kpi span{font-size:12px;color:var(--ink-3)}
+.model-usage-kpi strong{font:600 18px/1.25 var(--mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.model-table{min-width:900px}
+.model-table th:first-child{min-width:235px}
+.model-table th.n,.model-table td.n{min-width:96px}
+.model-identity{display:flex;flex-direction:column;gap:4px}
+.model-identity-main{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.model-agent{font-size:12px;color:var(--ink-2);white-space:nowrap}
+.model-effort{font:500 11px var(--mono);color:var(--ink-3);background:var(--sunk);padding:1px 6px;border-radius:4px}
+.model-total{font-weight:600;color:var(--ink)}
+.model-share{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:4px;color:var(--ink-3);font:11px var(--mono)}
+.model-share-track{display:block;width:64px;height:4px;overflow:hidden;background:var(--sunk);border-radius:99px}
+.model-share-fill{display:block;height:100%;background:var(--codex);border-radius:99px}
+@media (max-width:520px){.model-usage-summary{grid-template-columns:1fr}.model-usage-kpi{padding:10px 12px}}
 </style>
 
 <div class="wrap">
@@ -166,7 +182,7 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
   <div class="head-r">
     <div class="head-actions"><button type="button" class="export-btn" id="export-btn" title="ดาวน์โหลดไฟล์ตัวเลขล้วน (ไม่มี prompt / path) ส่งให้คนรวมยอดทีม">⬇ Export ส่งทีม</button>
     <div class="live" id="live" role="status"><i class="pulse"></i><span id="live-t">กำลังโหลด…</span></div></div>
-    <div class="legend"><span><i class="sw" style="background:var(--cb)"></i>CodeBuddy CLI</span><span><i class="sw" style="background:var(--ide)"></i>CodeBuddy IDE</span><span><i class="sw" style="background:var(--claude)"></i>Claude</span></div>
+    <div class="legend"><span><i class="sw" style="background:var(--cb)"></i>CodeBuddy CLI</span><span><i class="sw" style="background:var(--ide)"></i>CodeBuddy IDE / VS Code</span><span><i class="sw" style="background:var(--claude)"></i>Claude</span></div>
   </div>
 </header>
 
@@ -181,7 +197,7 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
       <label class="field">แพ็ก Claude (USD/เดือน)<input id="plan" type="number" step="1" min="0" placeholder="ไม่มี"></label>
       <label class="field" id="f-plancx" hidden>แพ็ก Codex (USD/เดือน)<input id="plancx" type="number" step="1" min="0" placeholder="ไม่มี"></label>
       <div class="field select-field"><span class="select-label" id="basis-label">เฉลี่ยค่าแพ็ก</span><select id="basis"><option value="calendar">ทุกวันในปฏิทิน</option><option value="20">วันที่ใช้ ÷ 20 วัน/เดือน</option><option value="22">วันที่ใช้ ÷ 22 วัน/เดือน</option></select></div>
-      <div class="field select-field"><span class="select-label" id="cbsrc-label">CodeBuddy</span><select id="cbsrc"><option value="all">CLI + IDE</option><option value="cli">CLI เท่านั้น</option><option value="ide">IDE เท่านั้น</option></select></div>
+      <div class="field select-field"><span class="select-label" id="cbsrc-label">CodeBuddy</span><select id="cbsrc"><option value="all">CLI + IDE / VS Code</option><option value="cli">CLI เท่านั้น</option><option value="ide">IDE / VS Code เท่านั้น</option></select></div>
       <div class="field select-field"><span class="select-label" id="cat-label">หมวดงาน</span><select id="cat"><option value="all">ทั้งหมด</option></select></div>
       <div class="field select-field"><span class="select-label" id="span-label">ช่วงวัน</span><select id="span"><option value="0">ทั้งหมด</option><option value="1">วันนี้</option><option value="7">7 วัน</option><option value="30">30 วัน</option><option value="custom">กำหนดเอง</option></select></div>
       <label class="field" id="f-from" hidden>จาก<input id="from" type="date"></label>
@@ -197,6 +213,15 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
     <div class="panel chart"><div class="eyebrow" style="margin-bottom:8px">รอบต่อวัน</div><div id="c-turns"></div><div class="legend chart-legend" id="l-turns"></div></div>
     <div class="panel chart"><div class="eyebrow" style="margin-bottom:8px" id="c-cost-t">ค่าใช้จ่ายต่อวัน</div><div id="c-cost"></div><div class="legend chart-legend" id="l-cost"></div></div>
   </div>
+</section>
+
+<section>
+  <div class="row-h">
+    <h2>ปริมาณการใช้แยกตาม model</h2>
+    <span class="tag">ตามตัวกรองด้านบน · แยก agent และ effort</span>
+  </div>
+  <div class="model-usage-summary" id="model-usage-summary" aria-label="สรุปปริมาณการใช้ model"></div>
+  <div class="panel scroll"><table class="model-table" id="model-usage"></table></div>
 </section>
 
 <section>
@@ -308,11 +333,11 @@ function renderDuel(){
   const clTag = (planUsd ? `${plan.name||"แพ็ก"} $${fmt(planUsd,0)}/เดือน` : models(CL)) + (planUsd&&b.hasApi ? ` · มูลค่า API $${fmt(b.api,0)}` : "");
   const viaRows=CB.filter(r=>r.via==="claude"), viaCr=viaRows.reduce((t,r)=>t+(r.credit||0),0);
   const ide=CB.filter(r=>r.source==="ide"), cli=CB.filter(r=>r.source!=="ide"), sumCr=rs=>rs.reduce((t,r)=>t+(r.credit||0),0);
-  const srcLine = `<p class="split"><i class="sw" style="background:var(--cb)"></i>CLI <b>${fmt(cli.length)}</b> รอบ · ${fmt(sumCr(cli),1)} cr <span class="sep">|</span> <i class="sw" style="background:var(--ide)"></i>IDE <b>${fmt(ide.length)}</b> รอบ · ${fmt(sumCr(ide),1)} cr${a.credit?` (${fmt(sumCr(ide)/a.credit*100,0)}%)`:""}</p>`;
+  const srcLine = `<p class="split"><i class="sw" style="background:var(--cb)"></i>CLI <b>${fmt(cli.length)}</b> รอบ · ${fmt(sumCr(cli),1)} cr <span class="sep">|</span> <i class="sw" style="background:var(--ide)"></i>IDE / VS Code <b>${fmt(ide.length)}</b> รอบ · ${fmt(sumCr(ide),1)} cr${a.credit?` (${fmt(sumCr(ide)/a.credit*100,0)}%)`:""}</p>`;
   const cbExtra = srcLine + `<p class="split">Claude สั่งให้ทำ <b>${fmt(viaRows.length)}</b> รอบ · ${fmt(viaCr,1)} credit (${a.credit?fmt(viaCr/a.credit*100,0):0}%) — ที่เหลือพิมพ์สั่งเอง</p>`;
   const subRows=CL.filter(r=>r.n_subagents), subTok=CL.reduce((t,r)=>t+(r.subagent_tokens||0),0);
   const clExtra = `<p class="split">subagent ${fmt(subRows.length)} รอบ · ${fM(subTok)} token (${(b.ctx+b.out)?fmt(subTok/(b.ctx+b.out)*100,0):0}% ของ token)</p>`;
-  const cbName = cbSource==="cli" ? "CodeBuddy CLI" : cbSource==="ide" ? "CodeBuddy IDE" : "CodeBuddy";
+  const cbName = cbSource==="cli" ? "CodeBuddy CLI" : cbSource==="ide" ? "CodeBuddy IDE / VS Code" : "CodeBuddy";
   // Codex only gets a column for people who actually use it.
   const cx=agg(CX), cxCost=codexCost(), cxPc=planCost(CX, planCxUsd);
   const cxBig = planCxUsd ? `${usdThb(cxPc.usd)}<small>${planBasis==="calendar"?"จ่ายจริง · "+cxPc.n+" วันปฏิทิน":"ใช้ "+cxPc.n+" วัน × $"+fmt(planCxUsd/Number(planBasis),2)}</small>`
@@ -374,7 +399,7 @@ function renderCharts(){
   // One series per CodeBuddy surface that has rows in range, so an IDE-only view has no empty CLI bars.
   const cbSeries = f => [
     ...(cli.length ? [{name:"CodeBuddy CLI",color:"var(--cb)",get:g(by(cli,f))}] : []),
-    ...(ide.length ? [{name:"CodeBuddy IDE",color:"var(--ide)",get:g(by(ide,f))}] : [])];
+    ...(ide.length ? [{name:"CodeBuddy IDE / VS Code",color:"var(--ide)",get:g(by(ide,f))}] : [])];
   const cxSeries = CX.length ? [{name:"Codex",color:"var(--codex)",get:g(by(CX,()=>1))}] : [];
   barChart($("#c-turns"), days, [...cbSeries(()=>1), {name:"Claude",color:"var(--claude)",get:g(by(CL,()=>1))}, ...cxSeries], v=>fmt(v), "รอบต่อวัน");
   legend($("#l-turns"), [...cbSeries(()=>1), {name:"Claude",color:"var(--claude)"}, ...cxSeries]);
@@ -580,6 +605,38 @@ function renderCats(){
     || `<p class="foot">ยังไม่มีข้อมูลในช่วงนี้</p>`;
 }
 
+function renderModelUsage(){
+  const by=new Map();
+  [...CB,...CL,...CX].forEach(r=>{
+    const model=r.model||"ไม่ระบุ model", effort=r.effort||"";
+    const key=JSON.stringify([r.agent,model,effort]);
+    const o=by.get(key)||{agent:r.agent,model,effort,n:0,input:0,cacheRead:0,cacheWrite:0,output:0,total:0};
+    o.n++; o.input+=r.input_tokens||0; o.cacheRead+=r.cache_read_tokens||0;
+    o.cacheWrite+=r.cache_write_tokens||0; o.output+=r.output_tokens||0; o.total+=tokAll(r);
+    by.set(key,o);
+  });
+  const rows=[...by.values()].sort((a,b)=>b.total-a.total||a.agent.localeCompare(b.agent)||a.model.localeCompare(b.model));
+  const total=rows.reduce((sum,r)=>sum+r.total,0), turns=rows.reduce((sum,r)=>sum+r.n,0);
+  const models=new Set(rows.map(r=>`${r.agent}\0${r.model}`));
+  $("#model-usage-summary").innerHTML=[
+    ["Token รวม",fmt(total)], ["จำนวน model",fmt(models.size)], ["จำนวนรอบ",fmt(turns)]
+  ].map(([label,value])=>`<div class="model-usage-kpi"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  if(!rows.length){
+    $("#model-usage").innerHTML=`<tbody><tr><td class="foot">ยังไม่มีข้อมูลในช่วงนี้</td></tr></tbody>`;
+    return;
+  }
+  const agentName={codebuddy:"CodeBuddy",claude:"Claude Code",codex:"Codex"};
+  const agentColor={codebuddy:"var(--cb)",claude:"var(--claude)",codex:"var(--codex)"};
+  const amount=(n)=>`<span title="${fmt(n)} tokens">${fM(n)}</span>`;
+  const shareCell=(share)=>`<div class="model-share"><span class="model-share-track" aria-hidden="true"><span class="model-share-fill" style="width:${share}%"></span></span><span>${fmt(share,1)}%</span></div>`;
+  $("#model-usage").innerHTML=`<thead><tr><th scope="col">Model / effort</th><th scope="col" class="n">รอบ</th><th scope="col" class="n">Input</th><th scope="col" class="n">Cache read</th><th scope="col" class="n">Cache write</th><th scope="col" class="n">Output</th><th scope="col" class="n">Token รวม</th></tr></thead><tbody>`+
+    rows.map(r=>{
+      const share=total?r.total/total*100:0;
+      return `<tr><td><div class="model-identity"><div class="model-identity-main"><span class="model-agent"><i class="dot" style="background:${agentColor[r.agent]||"var(--ink-3)"}"></i>${esc(agentName[r.agent]||r.agent)}</span><span class="mono">${esc(r.model)}</span>${r.effort?`<span class="model-effort">${esc(r.effort)}</span>`:""}</div></div></td><td class="n">${fmt(r.n)}</td><td class="n">${amount(r.input)}</td><td class="n">${amount(r.cacheRead)}</td><td class="n">${amount(r.cacheWrite)}</td><td class="n">${amount(r.output)}</td><td class="n model-total"><span title="${fmt(r.total)} tokens">${fM(r.total)}</span>${shareCell(share)}</td></tr>`;
+    }).join("")+
+    `</tbody><tfoot><tr><th scope="row">รวมตามตัวกรอง</th><td class="n">${fmt(turns)}</td><td class="n">${amount(rows.reduce((s,r)=>s+r.input,0))}</td><td class="n">${amount(rows.reduce((s,r)=>s+r.cacheRead,0))}</td><td class="n">${amount(rows.reduce((s,r)=>s+r.cacheWrite,0))}</td><td class="n">${amount(rows.reduce((s,r)=>s+r.output,0))}</td><td class="n model-total">${fM(total)}${shareCell(100)}</td></tr></tfoot>`;
+}
+
 function renderFindings(){
   const a=agg(CB), b=agg(CL), F=[];
   if(planUsd && b.hasApi){ const pc=planCost(CL);
@@ -606,7 +663,7 @@ function renderFindings(){
   $("#findings").innerHTML = F.map(([lv,t,p])=>`<div class="finding"><span class="pill ${lv}">${{warn:"ระวัง",info:"ข้อสังเกต"}[lv]}</span><div><b>${t}</b><p>${p}</p></div></div>`).join("") || `<p class="foot">ยังไม่มีข้อสังเกต</p>`;
 }
 
-const agentCell = (a, r) => a==="claude" ? `<i class="dot" style="background:var(--claude)"></i>Claude` : a==="codebuddy" ? `<i class="dot" style="background:var(--${r&&r.source==="ide"?"ide":"cb"})"></i>CodeBuddy ${r&&r.source==="ide"?"IDE":"CLI"}${r&&r.via==="claude"?' <span class="pill info">Claude สั่ง</span>':""}` : `<i class="dot" style="background:var(--ink-3)"></i>${esc(a)}`;
+const agentCell = (a, r) => a==="claude" ? `<i class="dot" style="background:var(--claude)"></i>Claude` : a==="codebuddy" ? `<i class="dot" style="background:var(--${r&&r.source==="ide"?"ide":"cb"})"></i>CodeBuddy ${r&&r.source==="ide"?"IDE / VS Code":"CLI"}${r&&r.via==="claude"?' <span class="pill info">Claude สั่ง</span>':""}` : `<i class="dot" style="background:var(--ink-3)"></i>${esc(a)}`;
 const costCell = r => r.agent==="codebuddy" ? `${fmt(r.credit,2)} cr` : (apiUsd(r)!=null ? `<span title="มูลค่าราคา API">$${fmt(apiUsd(r),2)}</span>` : "—");
 
 function renderLatest(){
@@ -653,7 +710,7 @@ function renderAll(){
   filterRows();
   const ds=ROWS.map(r=>r.ts).sort(); $("#range").textContent = ds.length ? ds[0].slice(0,10)+" → "+ds.at(-1).slice(0,10) : "ไม่มีข้อมูลในช่วงนี้";
   $("#f-plancx").hidden = !CX.length;
-  renderDuel(); renderVerdict(); renderCats(); renderCharts(); renderFindings(); renderLatest(); renderRepos(); renderTop();
+  renderDuel(); renderVerdict(); renderCats(); renderModelUsage(); renderCharts(); renderFindings(); renderLatest(); renderRepos(); renderTop();
 }
 
 // ---- live polling ----

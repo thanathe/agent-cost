@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fill the ledger with history from before the hook was installed.
 
-    python3 backfill.py                    # Claude Code + CodeBuddy CLI transcripts + CodeBuddy IDE
+    python3 backfill.py                    # Claude Code + CodeBuddy CLI transcripts + IDE / VS Code history
     python3 backfill.py --dry-run          # show what would be added, write nothing
     python3 backfill.py --since 2026-08-01
     python3 backfill.py --only claude      # claude | codebuddy | ide  (repeatable)
@@ -115,7 +115,7 @@ def main():
     if "codebuddy" in only:
         summarize("CodeBuddy CLI", found["codebuddy"])
     if "ide" in only:
-        summarize("CodeBuddy IDE", ide)
+        summarize("CodeBuddy IDE / VS Code", ide)
     if not C.RECORD_PROMPTS:
         print("\n(record_prompts ปิดอยู่ — ไม่ได้จดว่าสั่งอะไร เปิดได้ใน ~/.config/agent-cost/config.json)")
     return 0
