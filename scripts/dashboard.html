@@ -28,6 +28,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{scrollbar-color:var(--ink-3) var(--sunk);scrollbar-width:thin}
 .scroll{scrollbar-color:var(--ink-3) var(--sunk);scrollbar-width:auto}
 html::-webkit-scrollbar{width:10px;height:10px}
@@ -199,7 +200,7 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
       <div class="field select-field"><span class="select-label" id="basis-label">เฉลี่ยค่าแพ็ก</span><select id="basis"><option value="calendar">ทุกวันในปฏิทิน</option><option value="20">วันที่ใช้ ÷ 20 วัน/เดือน</option><option value="22">วันที่ใช้ ÷ 22 วัน/เดือน</option></select></div>
       <div class="field select-field"><span class="select-label" id="cbsrc-label">CodeBuddy</span><select id="cbsrc"><option value="all">CLI + IDE / VS Code</option><option value="cli">CLI เท่านั้น</option><option value="ide">IDE / VS Code เท่านั้น</option></select></div>
       <div class="field select-field"><span class="select-label" id="cat-label">หมวดงาน</span><select id="cat"><option value="all">ทั้งหมด</option></select></div>
-      <div class="field select-field"><span class="select-label" id="span-label">ช่วงวัน</span><select id="span"><option value="0">ทั้งหมด</option><option value="1">วันนี้</option><option value="7">7 วัน</option><option value="30">30 วัน</option><option value="custom">กำหนดเอง</option></select></div>
+      <div class="field select-field"><span class="select-label" id="span-label">ช่วงวัน</span><select id="span"><option value="0">ทั้งหมด</option><option value="1">วันนี้</option><option value="yesterday">เมื่อวาน</option><option value="7">7 วัน</option><option value="30">30 วัน</option><option value="custom">กำหนดเอง</option></select></div>
       <label class="field" id="f-from" hidden>จาก<input id="from" type="date"></label>
       <label class="field" id="f-to" hidden>ถึง<input id="to" type="date"></label>
     </div>
@@ -700,6 +701,9 @@ function renderTop(){
 function filterRows(){
   if(spanDays==="custom"){
     ROWS=ALL.filter(r=>{ const d=r.ts.slice(0,10); return (!fromDay || d>=fromDay) && (!toDay || d<=toDay); });
+  } else if(spanDays==="yesterday"){
+    const d=new Date(); d.setDate(d.getDate()-1); const yesterday=dayKey(d);
+    ROWS=ALL.filter(r=>r.ts.slice(0,10)===yesterday);
   } else if(!spanDays){ ROWS=ALL; } else { const d=new Date(); d.setDate(d.getDate()-(spanDays-1)); const from=dayKey(d); ROWS=ALL.filter(r=>r.ts.slice(0,10)>=from); }
   if(catFilter!=="all") ROWS = ROWS.filter(r=>catOf(r)===catFilter);
   const isIde = r => r.source==="ide";
@@ -767,7 +771,7 @@ function applyPlanDefault(){
   syncDropdown($("#basis"));
   $("#basis").addEventListener("change",e=>{ planBasis=e.target.value; store.set("ac-basis",planBasis); renderAll(); });
   const sp=store.get("ac-span");
-  if(sp==="custom"){ spanDays="custom"; $("#span").value="custom"; } else if(sp!==null && parseInt(sp)>=0){ spanDays=parseInt(sp); $("#span").value=sp; }
+  if(sp==="custom"||sp==="yesterday"){ spanDays=sp; $("#span").value=sp; } else if(sp!==null && parseInt(sp)>=0){ spanDays=parseInt(sp); $("#span").value=sp; }
   syncDropdown($("#span"));
   fromDay=store.get("ac-from")||""; toDay=store.get("ac-to")||""; $("#from").value=fromDay; $("#to").value=toDay;
   const showCustom=()=>{ const on=spanDays==="custom"; $("#f-from").hidden=!on; $("#f-to").hidden=!on; };
@@ -776,11 +780,12 @@ function applyPlanDefault(){
     if(!fromDay){ fromDay=ds[0]; $("#from").value=fromDay; store.set("ac-from",fromDay); }
     if(!toDay){ toDay=ds.at(-1); $("#to").value=toDay; store.set("ac-to",toDay); } };
   showCustom();
-  $("#from").addEventListener("change",e=>{ fromDay=e.target.value; store.set("ac-from",fromDay); renderAll(); });
-  $("#to").addEventListener("change",e=>{ toDay=e.target.value; store.set("ac-to",toDay); renderAll(); });
+  const useCustomRange=()=>{ spanDays="custom"; $("#span").value="custom"; store.set("ac-span","custom"); showCustom(); syncDropdown($("#span")); };
+  $("#from").addEventListener("change",e=>{ fromDay=e.target.value; store.set("ac-from",fromDay); useCustomRange(); renderAll(); });
+  $("#to").addEventListener("change",e=>{ toDay=e.target.value; store.set("ac-to",toDay); useCustomRange(); renderAll(); });
   $("#cpx").addEventListener("input",e=>{ const v=parseFloat(e.target.value); creditUsd=v>0?v:null; store.set("ac-cpx", creditUsd?String(creditUsd):""); renderAll(); });
   $("#plan").addEventListener("input",e=>{ const v=parseFloat(e.target.value); planUsd=v>0?v:null; planTouched=true; store.set("ac-plan", planUsd?String(planUsd):"0"); renderAll(); });
-  $("#span").addEventListener("change",e=>{ spanDays = e.target.value==="custom" ? "custom" : (parseInt(e.target.value)||0);
+  $("#span").addEventListener("change",e=>{ spanDays = ["custom","yesterday"].includes(e.target.value) ? e.target.value : (parseInt(e.target.value)||0);
     store.set("ac-span",String(spanDays)); showCustom(); if(spanDays==="custom") seedCustom(); renderAll(); });
   document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>{ topAgent=b.dataset.a; store.set("ac-top",topAgent); renderTop(); }));
   const tip=$("#tip");
