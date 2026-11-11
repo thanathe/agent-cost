@@ -155,6 +155,15 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
 </section>
 
 <section>
+  <div class="row-h"><h2>ช้าเร็วต่างกันแค่ไหน</h2>
+    <span class="tag">เวลา = ทั้งรอบ รวมรอ tool · ใช้ตัวกรองหมวดงานด้านบนเทียบงานแบบเดียวกัน</span>
+  </div>
+  <div class="panel scroll"><table id="speed"></table></div>
+  <div class="panel scroll"><table id="speed-cat"></table></div>
+  <p class="foot">สีเขียว = ดีสุดในแถบนั้น (เฉพาะ agent ที่มี ≥ 20 รอบ · ไม่ถึง 5 รอบไม่แสดง) · เวลาต่อรอบขึ้นกับขนาดงาน — ตัวที่เทียบกันได้ตรงกว่าคือ <b>output token/วิ</b> (เร็วแค่ไหนตอนเขียน) กับ <b>วิ/tool call</b> (เดินงานแต่ละก้าวเร็วแค่ไหน) · รอบที่ไม่มีเวลาไม่นับ · ช่องในตารางหมวดต้องมีอย่างน้อย 5 รอบ</p>
+</section>
+
+<section>
   <h2>รายวัน</h2>
   <div class="charts">
     <div class="panel chart"><div class="eyebrow" style="margin-bottom:8px">รอบต่อวัน</div><div id="c-turns"></div><div class="legend chart-legend" id="l-turns"></div></div>
@@ -422,6 +431,44 @@ function renderCats(){
     || `<p class="foot">ยังไม่มีข้อมูลในช่วงนี้</p>`;
 }
 
+// Speed: per-turn wall time is driven by task size, so show the size-adjusted rates beside it.
+const med = a => { if(!a.length) return null; const b=[...a].sort((x,y)=>x-y), m=b.length>>1; return b.length%2 ? b[m] : (b[m-1]+b[m])/2; };
+const pct = (a,q) => { if(!a.length) return null; const b=[...a].sort((x,y)=>x-y); return b[Math.min(b.length-1, Math.floor(b.length*q))]; };
+const speedKey = r => r.agent==="codebuddy" ? (r.source==="ide" ? "codebuddy|ide" : "codebuddy|cli") : r.agent+"|";
+function speedStats(rs){
+  rs = rs.filter(r=>(r.elapsed_sec||0)>0);
+  const sec=rs.map(r=>r.elapsed_sec), T=sec.reduce((a,b)=>a+b,0), out=rs.reduce((t,r)=>t+(r.output_tokens||0),0);
+  const withTools=rs.filter(r=>r.n_tool_calls>0);
+  return {n:rs.length, med:med(sec), p90:pct(sec,.9), tps:T?out/T:null,
+          spt:med(withTools.map(r=>r.elapsed_sec/r.n_tool_calls)), tools:med(rs.map(r=>r.n_tool_calls||0)),
+          outMed:med(rs.map(r=>r.output_tokens||0))};
+}
+const fSec = v => v==null ? "—" : v>=3600 ? fmt(v/3600,1)+" ชม." : v>=90 ? fmt(v/60,1)+" น." : fmt(v)+" วิ";
+function renderSpeed(){
+  const groups=new Map(); ROWS.forEach(r=>{ const k=speedKey(r); (groups.get(k)||groups.set(k,[]).get(k)).push(r); });
+  const order=["claude|","codebuddy|cli","codebuddy|ide","codex|","sky-harness|"];
+  const keys=[...groups.keys()].sort((a,b)=>(order.indexOf(a)+99)%99-(order.indexOf(b)+99)%99);
+  // Hide groups too small to say anything; only well-sampled groups compete for "fastest".
+  const stats=keys.map(k=>[k,speedStats(groups.get(k))]).filter(([,s])=>s.n>=5);
+  const big=stats.filter(([,s])=>s.n>=20);
+  const best=f=>Math.max(...big.map(([,s])=>f(s)??-1)), bestLow=f=>Math.min(...big.map(([,s])=>f(s)??Infinity));
+  const hi=(v,b)=>v!=null&&big.length>1&&v===b?' style="color:var(--ok);font-weight:600"':"";
+  const bTps=best(s=>s.tps), bSpt=bestLow(s=>s.spt), bMed=bestLow(s=>s.med);
+  const cell=k=>{ const [a,src]=k.split("|"); return agentCell(a,{source:src==="ide"?"ide":undefined}); };
+  $("#speed").innerHTML = `<thead><tr><th>Agent</th><th class="n">รอบ</th><th class="n">เวลา/รอบ (กลาง)</th><th class="n">p90</th><th class="n">output token/วิ</th><th class="n">วิ/tool call</th><th class="n">tool/รอบ</th><th class="n">output/รอบ</th></tr></thead><tbody>`+
+    (stats.map(([k,s])=>`<tr><td style="white-space:nowrap">${cell(k)}</td><td class="n">${fmt(s.n)}</td><td class="n"${hi(s.med,bMed)}>${fSec(s.med)}</td><td class="n">${fSec(s.p90)}</td><td class="n"${hi(s.tps,bTps)}>${s.tps==null?"—":fmt(s.tps,1)}</td><td class="n"${hi(s.spt,bSpt)}>${s.spt==null?"—":fmt(s.spt,1)}</td><td class="n">${s.tools==null?"—":fmt(s.tools,0)}</td><td class="n">${s.outMed==null?"—":fM(s.outMed)}</td></tr>`).join("")
+     || `<tr><td colspan="8" class="foot">ยังไม่มีข้อมูลเวลาในช่วงนี้</td></tr>`)+`</tbody>`;
+  // Category × agent: the fair comparison — same kind of work.
+  const cats=[...new Set(ROWS.map(catOf))];
+  const cellOf=(cat,k)=>{ const s=speedStats(ROWS.filter(r=>catOf(r)===cat && speedKey(r)===k)); return s.n>=5 ? s : null; };
+  const lines=cats.map(c=>[c, stats.map(([k])=>cellOf(c,k))]).filter(([,cs])=>cs.filter(Boolean).length>=2)
+    .sort((a,b)=>b[1].reduce((t,s)=>t+(s?s.n:0),0)-a[1].reduce((t,s)=>t+(s?s.n:0),0));
+  $("#speed-cat").innerHTML = lines.length ? `<thead><tr><th>หมวดงาน</th>${stats.map(([k])=>`<th class="n" style="white-space:nowrap">${cell(k)}</th>`).join("")}</tr></thead><tbody>`+
+    lines.map(([c,cs])=>{ const t=cs.map(s=>s?s.med:null).filter(v=>v!=null), lo=Math.min(...t);
+      return `<tr><td>${catPill(c)}</td>${cs.map(s=>s?`<td class="n"><span${s.med===lo&&t.length>1?' style="color:var(--ok);font-weight:600"':""}>${fSec(s.med)}</span><br><span class="foot">${fmt(s.tps,0)} tok/วิ · ${fmt(s.n)} รอบ</span></td>`:`<td class="n">—</td>`).join("")}</tr>`; }).join("")+`</tbody>`
+    : `<tbody><tr><td class="foot">ยังไม่มีหมวดงานที่มีอย่างน้อย 2 agent × 5 รอบ ในช่วงนี้</td></tr></tbody>`;
+}
+
 function renderFindings(){
   const a=agg(CB), b=agg(CL), F=[];
   if(planUsd && b.hasApi){ const pc=planCost(CL);
@@ -497,7 +544,7 @@ function renderAll(){
   filterRows();
   const ds=ROWS.map(r=>r.ts).sort(); $("#range").textContent = ds.length ? ds[0].slice(0,10)+" → "+ds.at(-1).slice(0,10) : "ไม่มีข้อมูลในช่วงนี้";
   $("#f-plancx").hidden = !CX.length;
-  renderDuel(); renderVerdict(); renderCats(); renderCharts(); renderFindings(); renderLatest(); renderRepos(); renderTop();
+  renderDuel(); renderVerdict(); renderSpeed(); renderCats(); renderCharts(); renderFindings(); renderLatest(); renderRepos(); renderTop();
 }
 
 // ---- live polling ----

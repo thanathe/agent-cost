@@ -72,6 +72,8 @@ python3 ~/.claude/skills/agent-cost/scripts/dashboard.py --open          # http:
 bind แค่ 127.0.0.1 และตอบเฉพาะ Host ที่เป็น localhost — ledger มี prompt กับ path ไฟล์ ไม่ควรเปิดออกนอกเครื่อง
 ราคา credit / ค่าแพ็กที่พิมพ์ในหน้าเก็บใน browser ถ้าไม่พิมพ์จะใช้ `_plans` จาก `pricing.json`
 ทุกครั้งที่หน้าเว็บ poll จะดึงรอบใหม่จาก CodeBuddy IDE ให้ด้วย (≤ ทุก 3 วิ) ไม่ต้องรัน `ide_sync.py` แยก
+หัวข้อ "ช้าเร็วต่างกันแค่ไหน" เทียบเวลา/รอบ (กลาง, p90), output token/วิ, วิ/tool call ต่อ agent + ตารางแยกหมวดงาน
+(เวลา/รอบขึ้นกับขนาดงาน — ตัวที่เทียบได้ตรงคือ token/วิ กับ วิ/tool call · เวลานับรวมรอ tool ไม่ใช่ความเร็ว model ล้วน)
 
 **ย้อนเก็บของเก่า (ก่อนติดตั้ง hook):** อ่าน transcript ของ Claude Code + CodeBuddy CLI และ history ของ CodeBuddy IDE
 ที่อยู่ในเครื่องคนรัน — ใครลง skill แล้วรันคำสั่งเดียวกันก็ได้ของตัวเอง
