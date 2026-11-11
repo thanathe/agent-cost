@@ -28,6 +28,8 @@ IDLE_GAP_MS = 30 * 60 * 1000
 PROMPT_KINDS = ("user", "schedule", "goal")
 # Turns the harness starts by itself when a subagent / background job reports back.
 WAKE_KINDS = ("subagent-settled", "agent-message", "tool-jobs")
+# Events that mark "a request to the model is about to go out" — the clock for TTFT.
+REQUEST_EVENTS = ("step/start", "request/context", "llm/retry-started")
 WORK_EVENTS = ("assistant/message", "assistant/attempt", "tool/call", "tool/result", "user/message")
 
 
@@ -63,9 +65,29 @@ def text_of(message):
     return " ".join(" ".join(parts).split())
 
 
+def call_timing(stream, sent):
+    """(ttft_ms, gen_ms) for one model call from its streamed chunks.
+
+    ttft = first content chunk − when the request went out; gen = finish − first chunk,
+    i.e. pure generation time with tool waits and queueing taken out."""
+    first = last = None
+    for c in stream or []:
+        t = c.get("time", c.get("time0"))
+        if not isinstance(t, (int, float)):
+            continue
+        kind = (c.get("chunk") or {}).get("type")
+        if first is None and (c.get("type") != "chunk" or kind == "block-start"):
+            first = t
+        if kind == "finish":
+            last = t
+    if first is None or sent is None or first < sent:
+        return None, None
+    return int(first - sent), (int(last - first) if last and last >= first else None)
+
+
 def read_session(path):
     """Parse one journal → (header, {turn: turn-dict})."""
-    header, turns, cur = {}, {}, None
+    header, turns, cur, sent = {}, {}, None, None
     for line in decompress(path):
         try:
             ev = json.loads(line)
@@ -81,7 +103,8 @@ def read_session(path):
             cur = d.get("turn")
             turns[cur] = {"start": tm, "end": None, "reason": None, "times": [tm], "usage": {},
                           "model": None, "tools": [], "tool_errors": 0, "api_errors": 0,
-                          "error": None, "prompt": "", "prompt_kind": None, "wake": None, "sub": []}
+                          "error": None, "prompt": "", "prompt_kind": None, "wake": None, "sub": [],
+                          "ttft": [], "gen_ms": 0, "gen_out": 0}
             continue
         turn = turns.get(d.get("turn", cur)) if isinstance(d, dict) else None
         if turn is None:
@@ -90,6 +113,8 @@ def read_session(path):
             continue
         if kind in WORK_EVENTS and tm:
             turn["times"].append(tm)
+        if kind in REQUEST_EVENTS and tm:
+            sent = tm
         if kind == "turn/end":
             turn["end"] = tm
             turn["reason"] = (d.get("reason") or {}).get("kind")
@@ -100,6 +125,13 @@ def read_session(path):
             msg = d.get("message") or {}
             key = msg.get("id") or f"{d.get('step')}:{tm}"
             turn["usage"][key] = d.get("usage") or {}
+            ttft, gen = call_timing(d.get("stream"), sent)
+            if ttft is not None:
+                turn["ttft"].append(ttft)
+                if gen:
+                    turn["gen_ms"] += gen
+                    turn["gen_out"] += (d.get("usage") or {}).get("outputTokens", 0) or 0
+            sent = None
             model = (msg.get("source") or {}).get("model")
             if model:
                 turn["model"] = model
@@ -226,6 +258,12 @@ def build_records(sessions, prompts=True):
             rec["error"] = turn["error"]
         if turn.get("auto"):
             rec["auto"] = True
+        # Model speed with tool waits removed: one TTFT per model call, plus generation time.
+        ttft = list(turn["ttft"]) + [x for _, st in turn["sub"] for x in st["ttft"]]
+        if ttft:
+            rec["ttft_ms"] = ttft
+            rec["gen_sec"] = round((turn["gen_ms"] + sum(st["gen_ms"] for _, st in turn["sub"])) / 1000, 1)
+            rec["gen_output_tokens"] = turn["gen_out"] + sum(st["gen_out"] for _, st in turn["sub"])
         if turn["sub"]:
             rec["n_subagents"] = len({s for s, _ in turn["sub"]})
             rec["subagent_tokens"] = sub_tok

@@ -160,7 +160,11 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
   </div>
   <div class="panel scroll"><table id="speed"></table></div>
   <div class="panel scroll"><table id="speed-cat"></table></div>
-  <p class="foot">สีเขียว = ดีสุดในแถบนั้น (เฉพาะ agent ที่มี ≥ 20 รอบ · ไม่ถึง 5 รอบไม่แสดง) · เวลาต่อรอบขึ้นกับขนาดงาน — ตัวที่เทียบกันได้ตรงกว่าคือ <b>output token/วิ</b> (เร็วแค่ไหนตอนเขียน) กับ <b>วิ/tool call</b> (เดินงานแต่ละก้าวเร็วแค่ไหน) · รอบที่ไม่มีเวลาไม่นับ · ช่องในตารางหมวดต้องมีอย่างน้อย 5 รอบ</p>
+  <div class="panel scroll" id="speed-model-wrap" hidden>
+    <div class="row-h" style="margin-bottom:8px"><h2 style="font-size:15px">ความเร็ว model ล้วน (TTFT)</h2><span class="tag">ตัดเวลารอ tool ออกแล้ว · ตอนนี้มีแค่ SKY Harness ที่เก็บเวลาแบบนี้</span></div>
+    <table id="speed-model"></table>
+  </div>
+  <p class="foot">สีเขียว = ดีสุดในแถบนั้น (เฉพาะ agent ที่มี ≥ 20 รอบ · ไม่ถึง 5 รอบไม่แสดง) · เวลาต่อรอบขึ้นกับขนาดงาน — ตัวที่เทียบกันได้ตรงกว่าคือ <b>output token/วิ</b> (เร็วแค่ไหนตอนเขียน) กับ <b>วิ/tool call</b> (เดินงานแต่ละก้าวเร็วแค่ไหน) · <b>TTFT</b> = รอนานแค่ไหนกว่า model จะเริ่มตอบ ต่อการเรียก 1 ครั้ง · <b>พิมพ์ token/วิ</b> = ความเร็วตอนพิมพ์ล้วน ไม่รวมรอ · รอบที่ไม่มีเวลาไม่นับ · ช่องในตารางหมวดต้องมีอย่างน้อย 5 รอบ</p>
 </section>
 
 <section>
@@ -463,10 +467,24 @@ function renderSpeed(){
   const cellOf=(cat,k)=>{ const s=speedStats(ROWS.filter(r=>catOf(r)===cat && speedKey(r)===k)); return s.n>=5 ? s : null; };
   const lines=cats.map(c=>[c, stats.map(([k])=>cellOf(c,k))]).filter(([,cs])=>cs.filter(Boolean).length>=2)
     .sort((a,b)=>b[1].reduce((t,s)=>t+(s?s.n:0),0)-a[1].reduce((t,s)=>t+(s?s.n:0),0));
+  renderSpeedModel();
   $("#speed-cat").innerHTML = lines.length ? `<thead><tr><th>หมวดงาน</th>${stats.map(([k])=>`<th class="n" style="white-space:nowrap">${cell(k)}</th>`).join("")}</tr></thead><tbody>`+
     lines.map(([c,cs])=>{ const t=cs.map(s=>s?s.med:null).filter(v=>v!=null), lo=Math.min(...t);
       return `<tr><td>${catPill(c)}</td>${cs.map(s=>s?`<td class="n"><span${s.med===lo&&t.length>1?' style="color:var(--ok);font-weight:600"':""}>${fSec(s.med)}</span><br><span class="foot">${fmt(s.tps,0)} tok/วิ · ${fmt(s.n)} รอบ</span></td>`:`<td class="n">—</td>`).join("")}</tr>`; }).join("")+`</tbody>`
     : `<tbody><tr><td class="foot">ยังไม่มีหมวดงานที่มีอย่างน้อย 2 agent × 5 รอบ ในช่วงนี้</td></tr></tbody>`;
+}
+
+// TTFT per model call (only harnesses that journal stream timing — SKY AI Harness today).
+function renderSpeedModel(){
+  const rs=ROWS.filter(r=>Array.isArray(r.ttft_ms)&&r.ttft_ms.length);
+  $("#speed-model-wrap").hidden = !rs.length; if(!rs.length) return;
+  const by=new Map(); rs.forEach(r=>{ const k=r.agent+"|"+(r.model||"?"); const o=by.get(k)||{agent:r.agent,model:r.model||"?",t:[],gen:0,out:0,n:0}; o.t.push(...r.ttft_ms); o.gen+=r.gen_sec||0; o.out+=r.gen_output_tokens||0; o.n++; by.set(k,o); });
+  const list=[...by.values()].filter(o=>o.t.length>=20).sort((a,b)=>b.t.length-a.t.length);
+  const lo=Math.min(...list.map(o=>med(o.t))), hiDec=Math.max(...list.map(o=>o.gen?o.out/o.gen:0));
+  const fMs=v=>v==null?"—":v>=1000?fmt(v/1000,1)+" วิ":fmt(v)+" ms";
+  $("#speed-model").innerHTML = `<thead><tr><th>Agent</th><th>Model</th><th class="n">รอบ</th><th class="n">เรียก model</th><th class="n">TTFT (กลาง)</th><th class="n">TTFT p90</th><th class="n">พิมพ์ token/วิ</th><th class="n">รอเริ่มตอบรวม</th></tr></thead><tbody>`+
+    list.map(o=>{ const m=med(o.t), dec=o.gen?o.out/o.gen:null, wait=o.t.reduce((a,b)=>a+b,0)/1000;
+      return `<tr><td style="white-space:nowrap">${agentCell(o.agent,{})}</td><td class="mono">${esc(o.model)}</td><td class="n">${fmt(o.n)}</td><td class="n">${fmt(o.t.length)}</td><td class="n"${m===lo&&list.length>1?' style="color:var(--ok);font-weight:600"':""}>${fMs(m)}</td><td class="n">${fMs(pct(o.t,.9))}</td><td class="n"${dec===hiDec&&list.length>1?' style="color:var(--ok);font-weight:600"':""}>${dec==null?"—":fmt(dec,1)}</td><td class="n">${fSec(wait)}</td></tr>`; }).join("")+`</tbody>`;
 }
 
 function renderFindings(){

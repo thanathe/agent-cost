@@ -200,6 +200,9 @@ python3 $S/harness_capture.py          # SKY AI Harness, all journals  (--home D
   - turns the harness wakes up by itself after a subagent or background job reports back carry
     `auto: true` and are labelled `[auto: subagent-settled] <last prompt in that session>`;
   - `[schedule] …` / `[goal] …` mark turns started by a harness schedule or goal, not typed by you.
+  - `ttft_ms` lists time-to-first-token for every model call in the turn (first streamed chunk minus
+    the last `step/start` / `request/context` / `llm/retry-started`); `gen_sec` + `gen_output_tokens`
+    give pure generation speed. The dashboard turns these into a per-model TTFT / tokens-per-second table.
   No credit in the journal and the gateway publishes no price — add the models
   (`mimo-v2.6-pro`, `deepseek-v4.1-flash`, `org-default`, …) to `pricing.json` if you want dollars.
 

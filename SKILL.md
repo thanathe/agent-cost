@@ -244,6 +244,9 @@ dashboard ดึงให้ทุก 10 วิ · `report.py` อ่านร�
 - รอบ `error` / `aborted` / `interrupted` เก็บไว้ (`end_reason`, `error`) · ไม่มี `turn/end` แต่เงียบเกิน 30 นาที = แอปล่ม → `unfinished`
 - รอบที่ harness ปลุกตัวเองหลัง subagent/background job เสร็จ → `auto: true` + label `[auto: subagent-settled] <prompt ล่าสุดใน session>`
 - `[schedule] …` / `[goal] …` = รอบที่ schedule หรือ goal ของ harness สั่ง ไม่ได้พิมพ์เอง
+- **TTFT** ต่อการเรียก model 1 ครั้ง = `block-start` แรกใน stream − event ส่ง request ล่าสุด (`step/start` / `request/context` / `llm/retry-started`)
+  → `ttft_ms` (list ต่อรอบ, รวม subagent) · `gen_sec` + `gen_output_tokens` = เวลาพิมพ์ล้วน (first chunk → `finish`) ไว้คิด token/วิ ไม่ปนเวลารอ tool
+  dashboard โชว์ตาราง "ความเร็ว model ล้วน" แยก model · TTFT ยาว ~64 วิ ของ deepseek-v4.1-flash เช็คแล้วไม่มี event แทรก = รอ gateway/model จริง
 - ยืนยันยอด 11 พ.ย. 2026: ผลรวม ledger = token ดิบทุก journal − รอบที่ fork ก็อปมา ตรงเป๊ะ (2,194M / 674 รอบ)
 
 ## Codex
