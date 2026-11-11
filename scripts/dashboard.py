@@ -20,6 +20,7 @@ from cost_paths import ledger_dir
 import ide_sync
 import categories
 from codex_capture import CodexCollector
+from harness_capture import HarnessCollector
 import export
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -27,7 +28,7 @@ PAGE = os.path.join(HERE, "dashboard.html")
 KEEP = ("turn_key", "agent", "session_id", "ts", "repo", "credit", "input_tokens", "output_tokens",
         "cache_read_tokens", "cache_write_tokens", "elapsed_sec", "model", "n_tool_calls",
         "via", "n_subagents", "subagent_tokens", "source",
-        "n_tool_errors", "n_api_errors", "error", "resumed")
+        "n_tool_errors", "n_api_errors", "error", "resumed", "end_reason")
 
 
 _ide = {"at": 0.0, "lock": threading.Lock()}
@@ -49,7 +50,7 @@ def sync_ide():
 
 def paths():
     d = ledger_dir()
-    return os.path.join(d, "ledger.jsonl"), os.path.join(d, "pricing.json"), os.path.join(d, "codex-ledger.jsonl")
+    return os.path.join(d, "ledger.jsonl"), os.path.join(d, "pricing.json"), os.path.join(d, "codex-ledger.jsonl"), os.path.join(d, "harness-ledger.jsonl")
 
 
 def etag():
@@ -64,9 +65,9 @@ def etag():
 
 
 def snapshot():
-    ledger, pricing_path, codex_ledger = paths()
+    ledger, pricing_path, codex_ledger, harness_ledger = paths()
     full = []
-    for source in (ledger, codex_ledger):
+    for source in (ledger, codex_ledger, harness_ledger):
         try:
             with open(source, encoding="utf-8") as f:
                 for line in f:
@@ -156,14 +157,15 @@ def main():
     ap.add_argument("--port", type=int, default=int(os.environ.get("AGENT_COST_PORT", 8791)))
     ap.add_argument("--open", action="store_true", help="open the browser")
     args = ap.parse_args()
-    collector = CodexCollector()
+    collectors = [("codex", CodexCollector()), ("sky-harness", HarnessCollector())]
     stopped = threading.Event()
     def collect_codex():
         while not stopped.is_set():
-            try:
-                collector.sync()
-            except Exception as exc:
-                print("codex sync failed:", exc, file=sys.stderr, flush=True)
+            for name, collector in collectors:
+                try:
+                    collector.sync()
+                except Exception as exc:
+                    print(f"{name} sync failed:", exc, file=sys.stderr, flush=True)
             stopped.wait(10)
     threading.Thread(target=collect_codex, daemon=True).start()
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)

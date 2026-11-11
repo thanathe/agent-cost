@@ -4,7 +4,7 @@
 
 **รู้ว่า agent ที่ใช้อยู่ กินเงินไปเท่าไหร่จริง ๆ**
 
-ทุกครั้งที่ Claude Code, CodeBuddy หรือ Codex ทำงานจบ 1 รอบ agent-cost จะจดลง ledger ในเครื่อง 1 บรรทัด —
+ทุกครั้งที่ Claude Code, CodeBuddy, Codex หรือ SKY AI Harness ทำงานจบ 1 รอบ agent-cost จะจดลง ledger ในเครื่อง 1 บรรทัด —
 credit, token, กี่วินาที, เรียก tool อะไร, แตะไฟล์ไหน, สั่งว่าอะไร แล้วเอามาคิดเป็นเงินให้ดูผ่าน dashboard สด ๆ
 หรือ report รายเดือน คำถามแบบ "งานแบบนี้ใช้ CodeBuddy ถูกกว่า Claude ไหม" เลยตอบด้วยตัวเลข ไม่ใช่ความรู้สึก
 
@@ -18,7 +18,7 @@ credit, token, กี่วินาที, เรียก tool อะไร, �
 
 - [ได้อะไรบ้าง](#ได้อะไรบ้าง) · [agent ที่รองรับ](#agent-ที่รองรับ) · [ติดตั้ง](#ติดตั้ง)
 - [ตั้งราคา](#ตั้งราคา) · [dashboard](#dashboard) · [report](#report)
-- [CodeBuddy IDE กับ Codex](#codebuddy-ide-กับ-codex) · [ย้อนเก็บของเก่า](#ย้อนเก็บของเก่า)
+- [CodeBuddy IDE, Codex กับ SKY AI Harness](#codebuddy-ide-codex-กับ-sky-ai-harness) · [ย้อนเก็บของเก่า](#ย้อนเก็บของเก่า)
 - [รวมยอดทั้งทีม](#รวมยอดทั้งทีม) · [กติกาการนับ](#กติกาการนับ) · [ความเป็นส่วนตัว](#ความเป็นส่วนตัว)
 - [ไม่ขึ้น / ตัวเลขแปลก](#ไม่ขึ้น--ตัวเลขแปลก) · [ถอดออก](#ถอดออก) · [ส่ง PR](#ส่ง-pr)
 
@@ -36,13 +36,13 @@ credit, token, กี่วินาที, เรียก tool อะไร, �
 
 ## agent ที่รองรับ
 
-| | Claude Code | CodeBuddy CLI | CodeBuddy IDE | Codex |
-|---|---|---|---|---|
-| เก็บยังไง | `Stop` hook | `Stop` hook | อ่าน history ของแอป | อ่าน rollout ในเครื่อง |
-| credit / ราคาจากเจ้าของ | ❌ ไม่มีใน transcript | ✅ credit จริง | ✅ credit จริง | ❌ ไม่มี |
-| token · เวลา · tool · prompt | ✅ | ✅ | ✅ | ✅ |
-| เงินมาจาก | แพ็กของเรา หรือราคา API | credit × ราคาที่ตั้ง | credit × ราคาที่ตั้ง | แพ็กของเรา หรือราคา API |
-| ของก่อนติดตั้ง | `backfill.py` | `backfill.py` | `backfill.py` | `codex_capture.py --month` |
+| | Claude Code | CodeBuddy CLI | CodeBuddy IDE | Codex | SKY AI Harness |
+|---|---|---|---|---|---|
+| เก็บยังไง | `Stop` hook | `Stop` hook | อ่าน history ของแอป | อ่าน rollout ในเครื่อง | อ่าน session journal ในเครื่อง |
+| credit / ราคาจากเจ้าของ | ❌ ไม่มีใน transcript | ✅ credit จริง | ✅ credit จริง | ❌ ไม่มี | ❌ ไม่มี (gateway ของ org) |
+| token · เวลา · tool · prompt | ✅ | ✅ | ✅ | ✅ | ✅ |
+| เงินมาจาก | แพ็กของเรา หรือราคา API | credit × ราคาที่ตั้ง | credit × ราคาที่ตั้ง | แพ็กของเรา หรือราคา API | ราคาใน `pricing.json` ไม่งั้นโชว์ token |
+| ของก่อนติดตั้ง | `backfill.py` | `backfill.py` | `backfill.py` | `codex_capture.py --month` | ได้เสมอ — อ่านทุก journal |
 
 รองรับด้วย: subagent ของ Claude (token รวมเข้ารอบที่เรียกมัน), รอบที่ Claude สั่ง CLI ให้ทำเอง (ติด `via: claude`),
 และ Claude Code ที่ชี้ไป model อื่นผ่าน gateway (แยกเป็น `claude-code:<model>` ไม่ปนยอด Claude)
@@ -154,15 +154,16 @@ python3 $R --repo my-service --limit 50
 
 ---
 
-## CodeBuddy IDE กับ Codex
+## CodeBuddy IDE, Codex กับ SKY AI Harness
 
-สองตัวนี้ไม่มี hook เลยใช้วิธีอ่านไฟล์ที่มันเขียนไว้ในเครื่องอยู่แล้ว · เปิด dashboard ไว้มันดึงให้เอง
+สามตัวนี้ไม่ได้ใช้ hook เลยใช้วิธีอ่านไฟล์ที่มันเขียนไว้ในเครื่องอยู่แล้ว · เปิด dashboard ไว้มันดึงให้เอง
 ถ้าไม่ได้เปิด ให้รันเองก่อนดู report
 
 ```bash
 S=~/.claude/skills/agent-cost/scripts
 python3 $S/ide_sync.py                 # CodeBuddy IDE  (--dry-run, --watch, --resync)
 python3 $S/codex_capture.py            # Codex เดือนนี้  (--month YYYY-MM, --watch)
+python3 $S/harness_capture.py          # SKY AI Harness ทุก journal  (--home DIR, --watch)
 ```
 
 - **CodeBuddy IDE** ลงเป็น `agent: codebuddy` + `source: ide` → รวมยอดกับ CLI ได้ แต่แยกดูได้ทุกที่
@@ -171,6 +172,10 @@ python3 $S/codex_capture.py            # Codex เดือนนี้  (--mont
 - **Codex** เขียนแยกเป็น `codex-ledger.jsonl` อ่านจาก `$CODEX_HOME` (ดีฟอลต์ `~/.codex`)
   นับเฉพาะรอบที่มี usage จริงต่อ response และจบสมบูรณ์ · รอบที่ถูกยกเลิกข้าม
   เลือกเดือนตามโฟลเดอร์ rollout เดือนเก่าต้องสั่ง `--month` เอง
+- **SKY AI Harness** (`dsh`) เขียนแยกเป็น `harness-ledger.jsonl` (`agent: sky-harness`) อ่านจาก
+  `$DSH_HOME/sessions/*/*/session.v4.jsonl.zstd` (ดีฟอลต์ `~/.dsh-org/dsh`) · ต้องมี `zstd` (`brew install zstd`)
+  subagent รวมเข้ารอบแม่ · session ที่ fork ข้ามรอบที่ก็อปจากแม่ · รอบ error/aborted/ล่มกลางทางยังเก็บ (ถูกคิดเงินแล้ว)
+  · รอบที่ harness ปลุกตัวเองหลัง subagent เสร็จติด `[auto: …]` · ไม่มี credit — ใส่ราคา model ใน `pricing.json` ถ้าอยากเห็นเป็นเงิน
 
 ## ย้อนเก็บของเก่า
 

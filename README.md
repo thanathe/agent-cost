@@ -4,7 +4,7 @@
 
 **Know what your coding agents actually cost you.**
 
-Every time Claude Code, CodeBuddy or Codex finishes a turn, agent-cost writes one line to a local
+Every time Claude Code, CodeBuddy, Codex or SKY AI Harness finishes a turn, agent-cost writes one line to a local
 ledger: credits, tokens, seconds, tools used, files touched, and what you asked for. Then it shows
 you the money — in a live dashboard or a monthly markdown report — so "is CodeBuddy cheaper than
 Claude for this kind of work?" becomes a number instead of a feeling.
@@ -20,7 +20,7 @@ Everything stays on your machine. No server, no account, no telemetry.
 
 - [What you get](#what-you-get) · [Supported agents](#supported-agents) · [Install](#install)
 - [Set your prices](#set-your-prices) · [The dashboard](#the-dashboard) · [Reports](#reports)
-- [Collectors: CodeBuddy IDE & Codex](#collectors-codebuddy-ide--codex) · [Backfill](#backfill-older-history)
+- [Collectors: CodeBuddy IDE, Codex & SKY AI Harness](#collectors-codebuddy-ide-codex--sky-ai-harness) · [Backfill](#backfill-older-history)
 - [Team roll-up](#team-roll-up) · [How counting works](#how-counting-works) · [Privacy](#privacy)
 - [Troubleshooting](#troubleshooting) · [Uninstall](#uninstall) · [Contributing](#contributing)
 
@@ -41,13 +41,13 @@ Everything stays on your machine. No server, no account, no telemetry.
 
 ## Supported agents
 
-| | Claude Code | CodeBuddy CLI | CodeBuddy IDE | Codex |
-|---|---|---|---|---|
-| How turns are captured | `Stop` hook | `Stop` hook | reads the app's history | reads local rollouts |
-| Credits / cost from the vendor | ❌ not in transcripts | ✅ real credits | ✅ real credits | ❌ none |
-| Tokens · duration · tools · prompt | ✅ | ✅ | ✅ | ✅ |
-| Money comes from | your plan, or API prices | credits × your price | credits × your price | your plan, or API prices |
-| History from before install | `backfill.py` | `backfill.py` | `backfill.py` | `codex_capture.py --month` |
+| | Claude Code | CodeBuddy CLI | CodeBuddy IDE | Codex | SKY AI Harness |
+|---|---|---|---|---|---|
+| How turns are captured | `Stop` hook | `Stop` hook | reads the app's history | reads local rollouts | reads local session journals |
+| Credits / cost from the vendor | ❌ not in transcripts | ✅ real credits | ✅ real credits | ❌ none | ❌ none (org gateway) |
+| Tokens · duration · tools · prompt | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Money comes from | your plan, or API prices | credits × your price | credits × your price | your plan, or API prices | API prices in `pricing.json`, else tokens only |
+| History from before install | `backfill.py` | `backfill.py` | `backfill.py` | `codex_capture.py --month` | always — reads every journal |
 
 Also handled: Claude subagents (their tokens roll into the turn that launched them), CLI runs that
 Claude itself started (tagged `via: claude`), and Claude Code pointed at a non-Claude model through a
@@ -168,15 +168,16 @@ right command for you.
 
 ---
 
-## Collectors: CodeBuddy IDE & Codex
+## Collectors: CodeBuddy IDE, Codex & SKY AI Harness
 
-Neither has a hook, so both are read from files they already write locally. The dashboard collects
+None of them has a hook we use, so both are read from files they already write locally. The dashboard collects
 them while it runs; otherwise run them yourself before a report.
 
 ```bash
 S=~/.claude/skills/agent-cost/scripts
 python3 $S/ide_sync.py                 # CodeBuddy IDE  (--dry-run, --watch, --resync)
 python3 $S/codex_capture.py            # Codex, current month  (--month YYYY-MM, --watch)
+python3 $S/harness_capture.py          # SKY AI Harness, all journals  (--home DIR, --watch)
 ```
 
 - **CodeBuddy IDE** lands as `agent: codebuddy`, `source: ide`, so it adds up with the CLI but can be
@@ -186,6 +187,21 @@ python3 $S/codex_capture.py            # Codex, current month  (--month YYYY-MM,
 - **Codex** writes its own `codex-ledger.jsonl` from `$CODEX_HOME` (default `~/.codex`). Only turns
   with real per-response usage and an explicit completion are counted; aborted turns are skipped.
   Month selection follows the rollout folders, so import older months explicitly.
+- **SKY AI Harness** (`dsh`) writes its own `harness-ledger.jsonl` as `agent: sky-harness`, from
+  `$DSH_HOME/sessions/*/*/session.v4.jsonl.zstd` (default `~/.dsh-org/dsh`). Needs the `zstd` binary
+  (`brew install zstd`) or `pip install zstandard`. Usage comes from each `assistant/message`
+  (`inputTokens` already excludes `cacheReadTokens`). 1 row = 1 `turn/start`…`turn/end`:
+  - subagent journals (`origin: subagent`) roll into the parent turn whose window they started in →
+    `n_subagents` / `subagent_tokens`, like Claude subagents;
+  - a forked session (`isSeeded`) replays its parent's turns before `createdAt` — those are skipped,
+    the parent already counted them;
+  - turns ending `error` / `aborted` / `interrupted` are kept (`end_reason`, `error`) — they were billed;
+    a turn with no `turn/end` that has been silent 30 min (app quit/crashed) is kept as `unfinished`;
+  - turns the harness wakes up by itself after a subagent or background job reports back carry
+    `auto: true` and are labelled `[auto: subagent-settled] <last prompt in that session>`;
+  - `[schedule] …` / `[goal] …` mark turns started by a harness schedule or goal, not typed by you.
+  No credit in the journal and the gateway publishes no price — add the models
+  (`mimo-v2.6-pro`, `deepseek-v4.1-flash`, `org-default`, …) to `pricing.json` if you want dollars.
 
 ## Backfill older history
 
@@ -321,6 +337,7 @@ echo "{\"session_id\":\"test\",\"transcript_path\":\"$T\",\"cwd\":\"$PWD\"}" \
 | No output at all | Hook not installed → re-run `install.py`, check its `settings:` line, start a new session |
 | IDE turns missing | `ide_sync.py --dry-run` returns 0 → history not found; set `CODEBUDDY_APPDATA` |
 | Codex turns missing | Aborted turns and older rollout formats are skipped by design |
+| SKY AI Harness: `need zstd on PATH` | `brew install zstd` (journals are zstd-compressed) |
 | Numbers look wrong after an update | `capture.py --rebuild`, or `ide_sync.py --resync` for IDE rows |
 | Claude's cost jumped after a backfill | You backfilled past the start of your current plan — restore the backup and use `--since` |
 | Dashboard badge turns red | The server stopped; start `dashboard.py` again |

@@ -235,7 +235,7 @@ def ledger_files(args):
     (`ledger-somchai.jsonl` → somchai), so nobody has to edit anyone's data to merge it.
     """
     if not args.ledger:
-        return [(LEDGER, "me")] + [(p, "me") for p in [os.path.join(LEDGER_DIR, "codex-ledger.jsonl")] if os.path.exists(p)]
+        return [(LEDGER, "me")] + [(p, "me") for p in [os.path.join(LEDGER_DIR, n) for n in ("codex-ledger.jsonl", "harness-ledger.jsonl")] if os.path.exists(p)]
     out = []
     for pat in args.ledger:
         hits = sorted(glob.glob(os.path.expanduser(pat))) or [os.path.expanduser(pat)]
@@ -397,7 +397,7 @@ def detail_table(rows, pricing, limit=200):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--month"); ap.add_argument("--since"); ap.add_argument("--until")
-    ap.add_argument("--repo"); ap.add_argument("--agent", choices=["codebuddy", "claude", "codex"])
+    ap.add_argument("--repo"); ap.add_argument("--agent", choices=["codebuddy", "claude", "codex", "sky-harness"])
     ap.add_argument("--source", choices=["cli", "ide"], help="CodeBuddy เฉพาะ CLI หรือ IDE")
     ap.add_argument("--compare", action="store_true")
     ap.add_argument("--ledger", nargs="+", metavar="PATH",

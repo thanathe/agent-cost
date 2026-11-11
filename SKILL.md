@@ -1,6 +1,6 @@
 ---
 name: agent-cost
-description: Track and compare what CodeBuddy vs Claude Code actually cost per turn — credits, tokens, elapsed time, tools used, and the task that was asked. A Stop hook appends every finished turn to an append-only ledger; a report command renders it to markdown in the wiki. Use when the user asks about agent cost / credit ใช้ไปเท่าไหร่ / เทียบ codebuddy กับ claude / รายงาน cost / ledger / "ใช้ credit กับอะไรบ้าง", or wants to install or debug the auto-capture hook.
+description: Track and compare what CodeBuddy vs Claude Code (plus Codex and SKY AI Harness) actually cost per turn — credits, tokens, elapsed time, tools used, and the task that was asked. A Stop hook appends every finished turn to an append-only ledger; a report command renders it to markdown in the wiki. Use when the user asks about agent cost / credit ใช้ไปเท่าไหร่ / เทียบ codebuddy กับ claude / รายงาน cost / ledger / "ใช้ credit กับอะไรบ้าง", or wants to install or debug the auto-capture hook.
 ---
 
 # Agent Cost
@@ -228,6 +228,21 @@ PY
 - งานนั้นจบในรอบเดียวไหม หรือต้องสั่งแก้ซ้ำอีก 5 รอบ (นับ record ที่ prompt คล้ายกันใน repo เดียวกัน)
 - ผลลัพธ์ผ่านเทส/รีวิวไหม — ledger ไม่รู้เรื่องคุณภาพ ต้องเอา PR/เทสมาประกอบเอง
 - `n_tool_calls` สูงผิดปกติ = วนหาของไม่เจอ มักแปลว่า context ไม่พอตั้งแต่แรก
+
+## SKY AI Harness
+
+ไม่ใช้ hook — `scripts/harness_capture.py` อ่าน journal ใน `$DSH_HOME/sessions/*/*/session.v4.jsonl.zstd`
+(ดีฟอลต์ `~/.dsh-org/dsh`) ลง `harness-ledger.jsonl` แยกไฟล์ เป็น `agent: "sky-harness"` · ต้องมี `zstd` (`brew install zstd`)
+dashboard ดึงให้ทุก 10 วิ · `report.py` อ่านรวมให้เอง (`--agent sky-harness`) · export ส่งไปด้วย · ไม่มี credit
+(ราคาเป็นเงินได้ต่อเมื่อใส่ราคา model ใน `pricing.json`) · อ่านทุก journal ทุกรอบ ไม่ต้อง backfill · lock ของตัวเอง `harness-ledger.lock`
+
+- token ต่อ `assistant/message` — `inputTokens` ไม่รวม `cacheReadTokens` อยู่แล้ว → `usage_v: 2` ตรง ๆ
+- **subagent** (`origin: subagent`, โฟลเดอร์เป็น uuid ล้วน) รวมเข้ารอบแม่ที่มันเริ่มอยู่ในช่วงนั้น → `n_subagents` `subagent_tokens`
+- **session ที่ fork** (`isSeeded`) ก็อปรอบของแม่มาก่อน `createdAt` → ข้าม ไม่งั้นนับซ้ำ (เจอจริง 44M token)
+- รอบ `error` / `aborted` / `interrupted` เก็บไว้ (`end_reason`, `error`) · ไม่มี `turn/end` แต่เงียบเกิน 30 นาที = แอปล่ม → `unfinished`
+- รอบที่ harness ปลุกตัวเองหลัง subagent/background job เสร็จ → `auto: true` + label `[auto: subagent-settled] <prompt ล่าสุดใน session>`
+- `[schedule] …` / `[goal] …` = รอบที่ schedule หรือ goal ของ harness สั่ง ไม่ได้พิมพ์เอง
+- ยืนยันยอด 11 พ.ย. 2026: ผลรวม ledger = token ดิบทุก journal − รอบที่ fork ก็อปมา ตรงเป๊ะ (2,194M / 674 รอบ)
 
 ## Codex
 

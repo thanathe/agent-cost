@@ -1,11 +1,11 @@
-<title>CodeBuddy · Claude · Codex Live</title>
+<title>Agent Cost Live</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 :root{
   --bg:#f5f6f8; --surface:#ffffff; --sunk:#eceef2; --line:#dde1e7;
   --ink:#12151b; --ink-2:#4b5361; --ink-3:#7a8392;
-  --codex:#4a3aa7; --claude:#eb6834; --cb:#2a78d6; --ide:#1baf7a;
+  --codex:#4a3aa7; --sky:#0e7f8c; --claude:#eb6834; --cb:#2a78d6; --ide:#1baf7a;
   --warn:#b26a00; --warn-bg:#fff4df; --crit:#c23b3b; --crit-bg:#fdecec; --ok:#1f7a4d; --ok-bg:#e6f4ec;
   --sans:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -14,14 +14,14 @@
   :root:not([data-theme="light"]){
     --bg:#101318; --surface:#181c23; --sunk:#12161c; --line:#2a303a;
     --ink:#eef1f5; --ink-2:#b3bac6; --ink-3:#848d9b;
-    --codex:#9085e9; --claude:#d95926; --cb:#3987e5; --ide:#199e70;
+    --codex:#9085e9; --sky:#3fbac6; --claude:#d95926; --cb:#3987e5; --ide:#199e70;
     --warn:#f0b249; --warn-bg:#2d2310; --crit:#f07c7c; --crit-bg:#2e1616; --ok:#5cc792; --ok-bg:#12281d;
   }
 }
 :root[data-theme="dark"]{
   --bg:#101318; --surface:#181c23; --sunk:#12161c; --line:#2a303a;
   --ink:#eef1f5; --ink-2:#b3bac6; --ink-3:#848d9b;
-  --codex:#9085e9; --claude:#d95926; --cb:#3987e5; --ide:#199e70;
+  --codex:#9085e9; --sky:#3fbac6; --claude:#d95926; --cb:#3987e5; --ide:#199e70;
   --warn:#f0b249; --warn-bg:#2d2310; --crit:#f07c7c; --crit-bg:#2e1616; --ok:#5cc792; --ok-bg:#12281d;
 }
 *{box-sizing:border-box}
@@ -43,6 +43,9 @@ section{display:flex;flex-direction:column;gap:12px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px}
 .duel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .duel.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.duel.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:900px){.duel.three,.duel.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.duel,.duel.three,.duel.four{grid-template-columns:minmax(0,1fr)}.side+.side{border-left:0;border-top:1px solid var(--line)}}
 .side{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
 .side+.side{border-left:1px solid var(--line)}
 .side-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
@@ -120,7 +123,7 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
 <header>
   <div>
     <div class="eyebrow">agent-cost ledger · <span id="range">—</span></div>
-    <h1>CodeBuddy · Claude · Codex — ใช้ไปเท่าไหร่</h1>
+    <h1>Agent ใช้ไปเท่าไหร่</h1>
     <p class="sub">อ่านสดจาก <code id="lpath">ledger.jsonl</code> · CodeBuddy คิดตาม credit · Claude คิดจากแพ็กเหมาใน <code>pricing.json</code> (ถ้ามี) ส่วนราคา API ใช้ดูว่าคุ้มกว่ากี่เท่า</p>
   </div>
   <div class="head-r">
@@ -192,7 +195,7 @@ tr.fresh td{background:var(--ok-bg);transition:background 1.5s}
   <div class="row-h">
     <h2>รอบที่แพงที่สุด</h2>
     <div class="seg" role="group" aria-label="เลือก agent">
-      <button data-a="codebuddy" aria-pressed="true">CodeBuddy</button><button data-a="codex" aria-pressed="false">Codex</button><button data-a="claude" aria-pressed="false">Claude</button>
+      <button data-a="codebuddy" aria-pressed="true">CodeBuddy</button><button data-a="codex" aria-pressed="false">Codex</button><button data-a="claude" aria-pressed="false">Claude</button><button data-a="sky-harness" aria-pressed="false">SKY Harness</button>
     </div>
   </div>
   <div class="panel scroll"><table id="top"></table></div>
@@ -211,12 +214,12 @@ const store = { get(k){try{return localStorage.getItem(k)}catch(e){return null}}
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
 let catFilter = "all", catSort = "turns", CATMAP = new Map(), planCxUsd = null, fxRate = null, fromDay = "", toDay = "", cbSource = "all", ALL = [], PRICING = {}, creditUsd = null, planUsd = null, planBasis = "calendar", spanDays = 0, newKeys = new Set(), knownKeys = null;
-let ROWS = [], CB = [], CL = [], CX = [];
+let ROWS = [], CB = [], CL = [], CX = [], SH = [];
 
 const ctx = r => (r.input_tokens||0)+(r.cache_read_tokens||0)+(r.cache_write_tokens||0);
 const tokAll = r => ctx(r)+(r.output_tokens||0);
 function apiUsd(r){
-  const p = PRICING[r.model]; if(!p || !["claude","codex"].includes(r.agent)) return null;
+  const p = PRICING[r.model]; if(!p || !["claude","codex","sky-harness"].includes(r.agent)) return null;
   const cw = p.cache_write ?? (p.input||0)*1.25;
   return ((r.input_tokens||0)*(p.input||0) + (r.output_tokens||0)*(p.output||0) + (r.cache_read_tokens||0)*(p.cache_read||0) + (r.cache_write_tokens||0)*cw)/1e6;
 }
@@ -273,8 +276,16 @@ function renderDuel(){
   const cxTag = (planCxUsd ? `แพ็ก $${fmt(planCxUsd,0)}/เดือน` : models(CX)) + (planCxUsd&&cx.hasApi ? ` · มูลค่า API $${fmt(cx.api,0)}` : "");
   const codexSide = CX.length ? side("Codex","var(--codex)",cx,cxBig,cxTag,
     `<p class="split">รอบที่ทำเสร็จในเครื่อง · ไม่มี credit${planCxUsd?"":cx.hasApi?" · ตัวเลขนี้คือราคา API":" · ใส่แพ็ก Codex หรือราคา API ใน pricing.json"}</p>`) : "";
-  $("#duel").classList.toggle("three", CX.length>0);
-  $("#duel").innerHTML = side(cbName,"var(--cb)",a,cbBig,models(CB),cbExtra) + side("Claude Code","var(--claude)",b,clBig,clTag,clExtra) + codexSide;
+  // SKY AI Harness: org-paid gateway, no credit and no published price — tokens unless pricing.json has the model.
+  const sh=agg(SH), shSub=SH.filter(r=>r.n_subagents), shSubTok=SH.reduce((t,r)=>t+(r.subagent_tokens||0),0);
+  const shErr=SH.filter(r=>r.end_reason&&r.end_reason!=="completed");
+  const skySide = SH.length ? side("SKY AI Harness","var(--sky)",sh,
+    sh.hasApi ? `${usdThb(sh.api)}<small>ราคา API</small>` : fM(sh.ctx+sh.out)+"<small>token</small>", models(SH),
+    `<p class="split">subagent ${fmt(shSub.length)} รอบ · ${fM(shSubTok)} token · จบไม่สำเร็จ ${fmt(shErr.length)} รอบ</p><p class="split">org gateway · ไม่มี credit${sh.hasApi?" · ตัวเลขนี้คือราคา API":" · ใส่ราคา model ใน pricing.json ถ้าอยากเห็นเป็นเงิน"}</p>`) : "";
+  const nSides = 2 + (CX.length>0) + (SH.length>0);
+  $("#duel").classList.toggle("three", nSides===3);
+  $("#duel").classList.toggle("four", nSides===4);
+  $("#duel").innerHTML = side(cbName,"var(--cb)",a,cbBig,models(CB),cbExtra) + side("Claude Code","var(--claude)",b,clBig,clTag,clExtra) + codexSide + skySide;
 }
 
 function claudeCost(){ const b=agg(CL); return planUsd ? planCost(CL).usd : (b.hasApi ? b.api : null); }
@@ -328,7 +339,8 @@ function renderCharts(){
   const cbSeries = f => [
     ...(cli.length ? [{name:"CodeBuddy CLI",color:"var(--cb)",get:g(by(cli,f))}] : []),
     ...(ide.length ? [{name:"CodeBuddy IDE",color:"var(--ide)",get:g(by(ide,f))}] : [])];
-  const cxSeries = CX.length ? [{name:"Codex",color:"var(--codex)",get:g(by(CX,()=>1))}] : [];
+  const cxSeries = [...(CX.length ? [{name:"Codex",color:"var(--codex)",get:g(by(CX,()=>1))}] : []),
+    ...(SH.length ? [{name:"SKY Harness",color:"var(--sky)",get:g(by(SH,()=>1))}] : [])];
   barChart($("#c-turns"), days, [...cbSeries(()=>1), {name:"Claude",color:"var(--claude)",get:g(by(CL,()=>1))}, ...cxSeries], v=>fmt(v), "รอบต่อวัน");
   legend($("#l-turns"), [...cbSeries(()=>1), {name:"Claude",color:"var(--claude)"}, ...cxSeries]);
   const pd=planCost(CL).perDay;
@@ -387,7 +399,7 @@ const CAT_COLOR = {plan:"#8a6d3b", review:"var(--cb)", ops:"var(--claude)", debu
 let catAgent = "all";
 function renderCats(){
   // The section has its own agent filter — "what does Claude do vs what do I send to CodeBuddy".
-  const opts=[["all","ทั้งหมด"], ...[["codebuddy","CodeBuddy"],["claude","Claude"],["codex","Codex"]]
+  const opts=[["all","ทั้งหมด"], ...[["codebuddy","CodeBuddy"],["claude","Claude"],["codex","Codex"],["sky-harness","SKY Harness"]]
     .filter(([a])=>ROWS.some(r=>r.agent===a))];
   if(opts.length<3) catAgent="all";
   if(!opts.some(([a])=>a===catAgent)) catAgent="all";
@@ -436,7 +448,7 @@ function renderFindings(){
   $("#findings").innerHTML = F.map(([lv,t,p])=>`<div class="finding"><span class="pill ${lv}">${{warn:"ระวัง",info:"ข้อสังเกต"}[lv]}</span><div><b>${t}</b><p>${p}</p></div></div>`).join("") || `<p class="foot">ยังไม่มีข้อสังเกต</p>`;
 }
 
-const agentCell = (a, r) => a==="claude" ? `<i class="dot" style="background:var(--claude)"></i>Claude` : a==="codebuddy" ? `<i class="dot" style="background:var(--${r&&r.source==="ide"?"ide":"cb"})"></i>CodeBuddy ${r&&r.source==="ide"?"IDE":"CLI"}${r&&r.via==="claude"?' <span class="pill info">Claude สั่ง</span>':""}` : `<i class="dot" style="background:var(--ink-3)"></i>${esc(a)}`;
+const agentCell = (a, r) => a==="sky-harness" ? `<i class="dot" style="background:var(--sky)"></i>SKY Harness` : a==="claude" ? `<i class="dot" style="background:var(--claude)"></i>Claude` : a==="codebuddy" ? `<i class="dot" style="background:var(--${r&&r.source==="ide"?"ide":"cb"})"></i>CodeBuddy ${r&&r.source==="ide"?"IDE":"CLI"}${r&&r.via==="claude"?' <span class="pill info">Claude สั่ง</span>':""}` : `<i class="dot" style="background:var(--ink-3)"></i>${esc(a)}`;
 const costCell = r => r.agent==="codebuddy" ? `${fmt(r.credit,2)} cr` : (apiUsd(r)!=null ? `<span title="มูลค่าราคา API">$${fmt(apiUsd(r),2)}</span>` : "—");
 
 function renderLatest(){
@@ -462,10 +474,12 @@ function renderRepos(){
 let topAgent = store.get("ac-top") || "codebuddy";
 function renderTop(){
   const cxBtn=document.querySelector('.seg button[data-a="codex"]'); if(cxBtn) cxBtn.hidden = !CX.length;
+  const shBtn=document.querySelector('.seg button[data-a="sky-harness"]'); if(shBtn) shBtn.hidden = !SH.length;
   if(topAgent==="codex" && !CX.length) topAgent="codebuddy";
+  if(topAgent==="sky-harness" && !SH.length) topAgent="codebuddy";
   document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.a===topAgent)));
   const score = r => topAgent!=="codebuddy" ? (apiUsd(r) ?? tokAll(r)/1e9) : (r.credit||0);
-  const rs=(topAgent==="codex"?CX:topAgent==="claude"?CL:CB).slice().sort((x,y)=>score(y)-score(x)).slice(0,12);
+  const rs=(topAgent==="codex"?CX:topAgent==="sky-harness"?SH:topAgent==="claude"?CL:CB).slice().sort((x,y)=>score(y)-score(x)).slice(0,12);
   $("#top").innerHTML = `<thead><tr><th>เวลา</th><th>Repo</th><th>หมวด</th><th>งานที่สั่ง</th><th>Model</th><th class="n">${topAgent!=="codebuddy"?"มูลค่า API":"Credit"}</th><th class="n">Token</th><th class="n">Tools</th><th class="n">เวลา</th></tr></thead><tbody>`+
     rs.map(r=>`<tr><td class="mono" style="white-space:nowrap">${r.ts.slice(5,16).replace("T"," ")}</td><td>${esc(r.repo)}</td><td>${catPill(catOf(r))}</td><td class="p">${esc(r.prompt||"—")}</td><td class="mono">${esc(r.model)}</td><td class="n">${costCell(r)}</td><td class="n">${fM(tokAll(r))}</td><td class="n">${r.n_tool_calls||0}</td><td class="n">${fmt((r.elapsed_sec||0)/60,1)} น.</td></tr>`).join("")+"</tbody>";
 }
@@ -476,7 +490,7 @@ function filterRows(){
   } else if(!spanDays){ ROWS=ALL; } else { const d=new Date(); d.setDate(d.getDate()-(spanDays-1)); const from=dayKey(d); ROWS=ALL.filter(r=>r.ts.slice(0,10)>=from); }
   if(catFilter!=="all") ROWS = ROWS.filter(r=>catOf(r)===catFilter);
   const isIde = r => r.source==="ide";
-  CB=ROWS.filter(r=>r.agent==="codebuddy" && (cbSource==="all" || (cbSource==="ide")===isIde(r))); CL=ROWS.filter(r=>r.agent==="claude"); CX=ROWS.filter(r=>r.agent==="codex");
+  CB=ROWS.filter(r=>r.agent==="codebuddy" && (cbSource==="all" || (cbSource==="ide")===isIde(r))); CL=ROWS.filter(r=>r.agent==="claude"); CX=ROWS.filter(r=>r.agent==="codex"); SH=ROWS.filter(r=>r.agent==="sky-harness");
 }
 function renderAll(){
   CATMAP = categories(ALL);

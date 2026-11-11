@@ -45,7 +45,7 @@ def default_name():
 
 def refresh():
     """Old installs recorded rows before prompts/categories/errors existed — re-derive them."""
-    for cmd in (["capture.py", "--rebuild"], ["ide_sync.py", "--resync"], ["codex_capture.py"]):
+    for cmd in (["capture.py", "--rebuild"], ["ide_sync.py", "--resync"], ["codex_capture.py"], ["harness_capture.py"]):
         path = os.path.join(HERE, cmd[0])
         print(f"→ {' '.join(cmd)}", file=sys.stderr)
         subprocess.run([sys.executable, path, *cmd[1:]], stdout=sys.stderr, stderr=sys.stderr)
@@ -53,7 +53,7 @@ def refresh():
 
 def read_rows(d):
     rows = []
-    for name in ("ledger.jsonl", "codex-ledger.jsonl"):
+    for name in ("ledger.jsonl", "codex-ledger.jsonl", "harness-ledger.jsonl"):
         p = os.path.join(d, name)
         if not os.path.exists(p):
             continue
